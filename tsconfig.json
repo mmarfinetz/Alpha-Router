@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "outDir": "build",
+    "declaration": false,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"]
+    },
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types"
+    ],
+    "types": ["node", "mocha", "chai"]
+  },
+  "include": [
+    "./src/**/*",
+    "./test/**/*",
+    "./scripts/**/*",
+    "./hardhat.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "src/scanner/advanced-scanner.ts",
+    "src/scanner/market-scanner.ts",
+    "src/cfmm/CFMM.ts",
+    "src/utility/UtilityFunction.ts",
+    "test/**/*",
+    "scripts/deploy.ts"
+  ],
+  "ts-node": {
+    "esm": false,
+    "files": true
+  }
+} 

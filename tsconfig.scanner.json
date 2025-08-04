@@ -1,0 +1,55 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "target": "ES2020",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "declaration": false,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"]
+    },
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types"
+    ],
+    "types": ["node"]
+  },
+  "ts-node": {
+    "esm": false,
+    "files": true
+  },
+  "include": [
+    "src/scanner/**/*",
+    "src/utils/**/*",
+    "src/config/**/*",
+    "src/services/**/*",
+    "src/cfmm/**/*",
+    "src/optimization/**/*",
+    "src/types.ts",
+    "src/utils.ts",
+    "src/addresses.ts",
+    "src/abi.ts",
+    "src/UniswapV2EthPair.ts",
+    "src/EthMarket.ts",
+    "src/Arbitrage.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "test/**/*",
+    "src/scanner/market-scanner.ts"
+  ]
+}

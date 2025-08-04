@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/*
+!node_modules/.gitkeep
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Build output
+dist/*
+!dist/.gitkeep
+build/*
+!build/.gitkeep
+*.tsbuildinfo
+
+# Build artifacts (executable binaries)
+arbitrage-bot
+*.exe
+*.bin
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Hardhat files
+cache/*
+!cache/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+typechain-types/*
+!typechain-types/.gitkeep
+
+# Coverage
+coverage/
+coverage.json
+.nyc_output/
+
+# Logs
+logs/
+*.log
+
+# Generated analysis files
+repomix-output.txt
+*.analysis
+
+# Temporary test files
+test-output/
+*.test.tmp
+
+# Local development
+.local/ .claude/
+
+# Claude AI directories
+.claude/
+.claude/agents/
+
+
+# Python virtual environment
+venv/
+

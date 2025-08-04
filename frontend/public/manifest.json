@@ -1,0 +1,8 @@
+{
+  "short_name": "MEV Dashboard",
+  "name": "MEV Bot Dashboard",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#0a1929"
+} 

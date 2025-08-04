@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": "../..",
+    "paths": {
+      "@/*": ["src/*"],
+      "@scanner/*": ["src/scanner/*"]
+    }
+  },
+  "include": [
+    "./*.ts",
+    "../utils/**/*",
+    "../config/**/*",
+    "../services/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

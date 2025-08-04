@@ -1,0 +1,660 @@
+# MEV Bot Project Instructions
+
+Use these specifications and guidelines while building the MEV bot.
+
+Write complete, production-ready code for every component. Maintain high standards for code quality and security.
+
+## Overview
+
+1. High-Level Overview
+Project Goal: The primary goal of this project is to create an Ethereum arbitrage bot that can identify and execute profitable arbitrage opportunities between Uniswap V2-like decentralized exchanges (DEXes). It utilizes Flashbots to protect these trades from front-running and sandwich attacks, thereby maximizing the potential for profit and minimizing the risk of MEV extraction by others. The bot also is designed to function utilizing real time data from a websocket connection.
+
+Architecture: The bot follows a modular architecture, separating concerns into distinct components:
+
+Data Acquisition: UniswapV2EthPair and MulticallService are responsible for fetching and updating market data (reserves) from various DEXes. index.websocket.ts handles real-time updates via a WebSocket connection.
+
+Arbitrage Logic: The Arbitrage class contains the core arbitrage detection and execution logic. It uses a dual decomposition approach (dualDecomposition, bisectionSearch, swapMarketArbitrage) for identifying optimal trades, though the current implementation is not fully using the dual decomposition and uses a simpler approach.
+
+Transaction Bundling: The MevShareService handles the interaction with Flashbots, bundling arbitrage transactions for private submission.
+
+Execution: The BundleExecutor smart contract is responsible for atomically executing the multi-leg arbitrage trades on-chain. FlashLoanExecutor provides a way to use Aave flash loans.
+
+Utilities: utils.ts provides helper functions. CircuitBreaker and GasPriceManager add resilience and gas optimization. logger.ts handles logging.
+
+Configuration: config.ts and thresholds.ts store configuration parameters.
+
+Tests: The test directory contains unit and integration tests.
+
+Data Flow:
+
+Initialization:
+
+index.websocket.ts (or index.ts) is the entry point.
+
+UniswapV2EthPair.getUniswapMarketsByToken fetches a list of relevant Uniswap V2 and Sushiswap pairs.
+
+MulticallService is used for efficient batch fetching of reserves.
+
+The Arbitrage class is initialized.
+
+The EnhancedWebSocketManager is initialized, subscribing to Transfer and Swap events on relevant DEX pairs.
+
+Real-time Monitoring (WebSocket Version):
+
+The EnhancedWebSocketManager receives real-time updates via the WebSocket.
+
+handleSubscriptionMessage filters relevant events.
+
+handleTransferEvent and handleSwapEvent are triggered. (Currently placeholders, but this is where reserve updates would be triggered).
+
+The Arbitrage class's evaluateMarkets method is called (potentially within the event handlers, or on a timer).
+
+Arbitrage Detection (Arbitrage.evaluateMarkets):
+
+Filters markets based on liquidity and volume thresholds.
+
+(Ideally) Uses dual decomposition or a similar optimization algorithm to determine the optimal arbitrage path and volume. The current implementation iterates through pairs directly.
+
+Returns a list of CrossedMarketDetails representing profitable opportunities.
+
+Arbitrage Execution (Arbitrage.takeCrossedMarkets):
+
+Iterates through the CrossedMarketDetails.
+
+calculateOptimalVolume determines the trade size. This is a simplified implementation in the current code, and a key area for improvement.
+
+createBundle prepares the Flashbots bundle, including a call to the BundleExecutor contract's uniswapWeth function. The FlashLoanExecutor contract is also present to execute a flashloan from AAVE.
+
+MevShareService.submitBundle sends the bundle to the Flashbots relay.
+
+Handles retries and monitors for bundle inclusion.
+
+Periodic Updates:
+
+A timer (in index.websocket.ts) periodically calls updateReserves (using MulticallService for efficiency) to refresh market data.
+
+2. Component Breakdown
+Let's examine each component in more detail:
+
+Smart Contracts
+contracts/interfaces/
+These interfaces define the expected functions of external contracts. They are crucial for type safety and ensuring the bot interacts correctly with the external world. The IUniswapV2Pair is especially important, as it's the primary interface for interacting with DEXes.
+
+Good: Using interfaces is excellent for abstracting external dependencies.
+
+Improvement: Consider using the official @uniswap/v2-core and @uniswap/v2-periphery npm packages for these interfaces to ensure they're always up-to-date and correct. This avoids potential mismatches. Also, consider adding interfaces for Aave (you have typechain factories, but interfaces in the interfaces directory are good practice).
+
+contracts/libraries/
+These libraries provide reusable mathematical functions.
+
+Math.sol: Provides min and sqrt functions. The sqrt function is crucial for Uniswap V2-style arbitrage calculations. Good use of a library for reusable logic.
+
+UQ112x112.sol: Handles fixed-point arithmetic. This is essential for accurate price and reserve calculations in Solidity, where floating-point numbers are not supported. This library provides a way to represent fractional numbers with high precision.
+
+contracts/BundleExecutor.sol
+This contract is the heart of the on-chain execution. It's designed to execute multiple calls atomically.
+
+Purpose: To execute a bundle of transactions (swaps) in a single atomic transaction. This prevents front-running and ensures the arbitrage either succeeds completely or fails without any partial execution.
+
+Key Functions:
+
+uniswapV2Call: This function is called by a Uniswap V2 pair during a swap. It's the callback mechanism. It receives the amounts swapped and the encoded data. It decodes the data to determine the next trade in the arbitrage sequence (on a different market). It then calls executeOperation to execute that next trade. The inUse mapping prevents reentrancy attacks.
+
+executeOperation: This function takes an array of targets, payloads, and values (for ETH transfers). It iterates through them, making calls to the target contracts. This is where the actual swaps on other DEXes would happen. It also handles returning any remaining ETH to the sender.
+
+approveSpender: This function approves the WETH spender, which is crucial for the arbitrage process.
+
+_handleWethTransfer: This internal function handles WETH transfers. It includes a calculation of a "netAmount" and "feeAmount," although the fee calculation (amount * 997 / 1000) is redundant, as the Uniswap V2 swap function already handles the 0.3% fee.
+
+_logSwapParameters: This is an internal utility function that logs swap parameters for monitoring and debugging.
+
+receive: This payable function allows the contract to receive ETH.
+
+Strengths:
+
+Atomicity: The use of executeOperation ensures that all trades within the bundle are executed together or not at all.
+
+Reentrancy Guard: The inUse mapping provides a simple but effective reentrancy guard, preventing malicious contracts from exploiting the callback mechanism.
+
+Flexibility: The executeOperation function can handle multiple calls, allowing for complex arbitrage strategies.
+
+Potential Issues & Improvements:
+
+Gas Optimization: The _logSwapParameters function uses a try-catch block to check if the target is a Uniswap V2 pair. This is expensive in terms of gas. A more gas-efficient approach would be to store a mapping of known Uniswap V2 pair addresses within the contract.
+
+Error Handling: While the contract reverts on failed calls within executeOperation, more granular error handling and logging could be beneficial. It might be helpful to emit an event with specific error details.
+
+uniswapV2Call Logic: The current implementation of uniswapV2Call seems overly complex. It's trying to calculate the "optimal" trade based on the change in reserves caused by a pending transaction. This is problematic:
+
+Front-Running: The reserve changes might not reflect the final state of the block. Another transaction could slip in between the simulation and the actual execution, changing the reserves and invalidating the calculation.
+
+Complexity: The logic for calculating optimalAmount is confusing and likely incorrect. It attempts to use a derivative-based approach (from the whitepaper), but it's misapplied in this context.
+
+Redundancy: The uniswapV2Call function calculates the repayment amount, but this should ideally be handled by the off-chain logic in Arbitrage.ts.
+
+Lack of Access Control: The uniswapV2Call function has no access control (it's external). While it's intended to be called by a Uniswap V2 pair, any contract could call it. This is a potential security vulnerability.
+
+Hardcoded Fee: The 997/1000 fee is hardcoded. It would be better to fetch this from the Uniswap V2 pair contract.
+
+Recommendation: Simplify uniswapV2Call. It should only:
+
+Verify the caller is a known Uniswap V2 pair (using a mapping).
+
+Decode the data to get the repayAmount and targetPair.
+
+Transfer the repayAmount back to the caller (the Uniswap V2 pair that initiated the flash swap).
+
+Call executeOperation to execute the next trade (if any).
+
+All arbitrage logic, including profit calculation and optimal volume calculation, should be done off-chain.
+
+contracts/FlashLoanExecutor.sol
+This contract handles initiating a flash loan from Aave and then executing the arbitrage using the BundleExecutor.
+
+Purpose: To obtain a flash loan from Aave, pass the funds to the BundleExecutor for arbitrage, and then repay the loan plus premium in the same transaction.
+
+Key Functions:
+
+executeOperation: This is the callback function required by the Aave flashLoanSimple function. It receives the borrowed asset, amount, and premium. It then:
+
+Decodes the parameters passed in params.
+
+Approves the BundleExecutor to spend the borrowed WETH.
+
+Calls uniswapWeth on the BundleExecutor, passing the borrowed amount, targets, and payloads.
+
+Calculates the repayment amount (borrowed amount + premium).
+
+Verifies that the contract has enough funds to repay the loan.
+
+Approves the Aave pool to withdraw the repayment amount.
+
+Returns true to indicate successful execution.
+
+executeFlashLoan: This function initiates the flash loan from the Aave pool. It encodes the necessary parameters for the executeOperation callback.
+
+updateBundleExecutor: Allows the owner to update the BundleExecutor address.
+
+rescueTokens and rescueETH: Emergency functions to recover funds.
+
+Strengths:
+
+Integration with Aave: Correctly uses the FlashLoanSimpleReceiverBase and the IPool interface.
+
+Clear Separation of Concerns: Separates the flash loan logic from the arbitrage execution logic.
+
+Potential Issues & Improvements:
+
+Error Handling: The try-catch block in executeOperation only emits an event. It should probably also attempt to repay the loan, even if the arbitrage fails, to avoid unnecessary fees.
+
+Hardcoded Referral Code: The referral code is hardcoded to 0. Consider making this configurable.
+
+Gas Optimizations The contract should aim for gas optimization
+
+contracts/TestToken.sol
+This is a standard ERC20 token contract, likely used for testing purposes. It's a good practice to have a mock token for local testing.
+
+contracts/UniswapFlashQuery.sol
+This contract is designed for efficient on-chain retrieval of data from Uniswap V2-like pairs.
+
+Purpose: To allow other contracts to query reserves and pair information in batches, reducing the number of external calls.
+
+Key Functions:
+
+getReservesByPairs: Takes an array of pair addresses and returns an array of reserves.
+
+getPairsByIndexRange: Takes a factory address, start index, and stop index, and returns an array of [token0, token1, pairAddress] for each pair within that range.
+
+Strengths:
+
+Efficiency: Enables fetching data for multiple pairs in a single call.
+
+Potential Issues & Improvements:
+
+Limited Functionality: It only provides basic data retrieval. More complex queries (like price calculations) might be needed.
+
+No Error Handling: The functions do not handle potential errors (e.g., if a pair address is invalid).
+
+contracts/UniswapV2Factory.sol
+This is a standard Uniswap V2 factory contract. It is used to create and manage pairs.
+
+Purpose: To create and manage Uniswap V2 pairs.
+
+Key Functions:
+
+createPair: Creates a new Uniswap V2 pair for a given token pair.
+
+setFeeTo: Sets the address to which trading fees are sent.
+
+setFeeToSetter: Sets the address that is authorized to change the feeTo address.
+
+getPair: Returns the address of the pair for a given token pair.
+
+allPairs: Returns the address of the pair at a given index in the allPairs array.
+
+allPairsLength: Returns the total number of pairs created by the factory.
+
+Strengths:
+
+Standard Implementation: Follows the standard Uniswap V2 factory pattern.
+
+create2 Usage: Uses create2 for deterministic pair address calculation.
+
+Potential Issues & Improvements:
+
+No Upgradability: The contract is not upgradeable.
+
+contracts/UniswapV2Pair.sol
+This is a standard Uniswap V2 pair contract. This contract should not be deployed by us, but is rather a contract we interact with.
+
+Purpose: To manage liquidity and facilitate swaps between two ERC20 tokens.
+
+Key Functions:
+
+mint: Mints liquidity tokens for users who add liquidity.
+
+burn: Burns liquidity tokens when users remove liquidity.
+
+swap: Executes a swap between the two tokens in the pair, enforcing the constant product formula.
+
+skim: Allows withdrawing excess tokens that might accumulate due to rounding errors.
+
+sync: Updates the reserves to match the actual token balances.
+
+getReserves: Returns the current reserves of the two tokens and the last block timestamp.
+
+Strengths:
+
+Standard Implementation: Follows the standard Uniswap V2 pair pattern.
+
+Reentrancy Guard: The lock modifier protects against reentrancy attacks.
+
+Potential Issues & Improvements:
+
+No Access Control (for testing): The initialize function has no access control. This is fine for testing, but must be restricted in a production environment. Only the factory should be able to initialize a pair.
+
+contracts/WETH9.sol
+This is a standard Wrapped Ether (WETH) contract.
+
+Purpose: To provide an ERC20-compatible wrapper around Ether.
+
+Key Functions:
+
+deposit: Allows users to deposit ETH and receive WETH.
+
+withdraw: Allows users to withdraw WETH and receive ETH.
+
+transfer, transferFrom, approve, allowance: Standard ERC20 functions.
+
+Strengths:
+
+Standard Implementation: Follows the standard WETH9 pattern.
+
+Potential Issues & Improvements:
+
+None apparent.
+
+src
+src/Arbitrage.ts
+This class encapsulates the core arbitrage logic.
+
+Purpose: To find and execute arbitrage opportunities between Uniswap V2-like markets.
+
+Key Members:
+
+wallet: The Ethereum wallet used for signing transactions.
+
+flashbotsProvider: The Flashbots provider for submitting bundles.
+
+bundleExecutorContract: The deployed BundleExecutor contract.
+
+marketsByToken: A mapping of token addresses to arrays of EthMarket instances.
+
+thresholds: Configuration for minimum profit, maximum gas price, etc.
+
+MAX_RETRIES: Maximum number of retries for bundle submission.
+
+RETRY_DELAY: Delay between retries.
+
+circuitBreaker: Instance of CircuitBreaker for handling failures.
+
+gasPriceManager: Instance of GasPriceManager for optimizing gas prices.
+
+cfmmNetwork: Internal representation of markets using the CFMM interface.
+
+utility: The utility function used to evaluate arbitrage opportunities.
+
+Key Methods:
+
+convertMarketsToNetwork: This method transforms the MarketsByToken data (which uses the EthMarket interface) into an internal representation (CFMM[]) suitable for the dual decomposition algorithm. It creates a matrix A to map global token indices to local market indices. This is a clever way to handle the different token orderings in different pairs.
+
+evaluateMarkets: This is the main entry point for finding arbitrage opportunities.
+
+It first updates the reserves of all markets using updateReserves.
+
+It then should use dual decomposition (or a similar optimization algorithm) to find the optimal arbitrage path and volume, given the current market prices. However, the current implementation does not fully leverage the dualDecomposition and bisectionSearch functions. It simply iterates through all pairs of markets. This is a major area for improvement.
+
+It returns a list of CrossedMarketDetails, sorted by profit.
+
+findArbitrageTrades: This is the current implementation of the arbitrage finding logic, but it's a simple pairwise comparison, not a proper optimization algorithm. It iterates through all pairs of markets for a given token and calculates the potential profit. It filters out opportunities that don't meet the minimum profit threshold.
+
+generateReferencePrices: Calculates a simple price for each market (reserve ratio).
+
+generateObjectiveFunction: This is intended to be part of the dual decomposition, but is not fully utilized.
+
+generatePenaltyVector: This is also part of the dual decomposition setup, but not fully utilized.
+
+takeCrossedMarkets: Iterates through the provided CrossedMarketDetails and attempts to execute each arbitrage trade. It includes retry logic.
+
+executeArbitrageTrade: This function prepares and submits the Flashbots bundle for a given arbitrage opportunity. It:
+
+Calculates the amount0Out and amount1Out based on the volume and the token order in the buyFromMarket.
+
+Calculates the expectedOutput from the sellToMarket.
+
+Encodes the data parameter for the uniswapV2Call callback, including the user's transaction hash, the target market, and the expected profit.
+
+Calls createBundle to prepare the bundle.
+
+Calls executeBundleWithRetry to submit the bundle.
+
+createBundle: Creates the Flashbots bundle, including estimating gas and setting the gas price.
+
+estimateGasWithBuffer: Estimates the gas required for the bundle execution and adds a buffer.
+
+getOptimalGasPrice: Calculates an optimal gas price, considering the current gas price, average gas price, and a premium.
+
+executeBundleWithRetry: Submits the bundle to Flashbots and retries up to MAX_RETRIES times if submission fails. It also checks the result of the bundle simulation.
+
+fetchWETHBalance: Fetches the WETH balance of an address, with retry logic.
+
+getGasPriceInfo: Gets the current and average gas price.
+
+calculateOptimalVolume: Calculates the optimal trade volume using a simplified approach.
+
+findRelatedMarkets: Finds markets related to the given pair.
+
+Strengths:
+
+Modular Design: The class is well-structured, with clear separation of concerns.
+
+Flashbots Integration: Properly uses the FlashbotsBundleProvider for bundle submission.
+
+Retry Logic: Includes retry logic for handling transient network errors.
+
+Gas Price Management: Uses GasPriceManager to dynamically adjust gas prices.
+
+Circuit Breaker: Uses CircuitBreaker to prevent repeated failures.
+
+Potential Issues & Improvements:
+
+Arbitrage Logic: The core arbitrage logic (finding the optimal path and volume) is very basic. It only considers pairwise arbitrage, not multi-hop arbitrage. The dualDecomposition and bisectionSearch functions are present but not effectively used. This is the most significant area for improvement. A more sophisticated algorithm is needed to find optimal multi-hop arbitrage opportunities. The current implementation is likely to miss many opportunities and may not be profitable in a competitive environment.
+
+Error Handling: While there is some basic error handling, it could be more robust. For example, specific errors from the DEX contracts could be handled differently.
+
+Gas Optimization: The estimateGasWithBuffer function simply adds a 20% buffer. More sophisticated gas estimation techniques could be used.
+
+Profit Calculation: The calculatePotentialProfit function is a very simplified estimation. A more accurate calculation would involve simulating the trades on both markets.
+
+Concurrency: While the code attempts to use p-limit for concurrency control, it's not fully integrated into all asynchronous operations.
+
+Market Updates: The evaluateMarkets function updates all markets on every block. This is inefficient. A better approach would be to update only the markets affected by recent transactions (using the WebSocket events).
+
+Hardcoded Values: There are a number of hardcoded values, such as ETHER and flash loan fees, that are defined both in config.ts and Arbitrage.ts. This can lead to inconsistency. Use a config file.
+
+MevShare Integration: The class name MevShareArbitrage and the use of MevShareService suggest that it should be using the MevShare service, but it is actually submitting directly to Flashbots.
+
+Missing Logic for Flashloan Executor: The code doesn't fully use the FlashLoanExecutor contract, nor does it implement the Flashbots v3 bundle format.
+
+src/UniswapV2EthPair.ts
+This class represents a Uniswap V2 pair and provides methods to interact with it. It implements the EthMarket interface.
+
+Purpose: To represent a Uniswap V2 pair and provide methods for interacting with it (getting reserves, calculating price impact, etc.).
+
+Key Members:
+
+marketAddress: The address of the Uniswap V2 pair contract.
+
+tokens: An array of two token addresses (e.g., [WETH, DAI]).
+
+protocol: The name of the DEX protocol ("UniswapV2").
+
+_tokenBalances: An internal mapping to store the token balances (reserves).
+
+provider: The Ethereum provider.
+
+Key Methods:
+
+getUniswapMarkets: Fetches all Uniswap V2 pairs from a given factory address. This is a static method. It uses batching (with BATCH_SIZE) and retries to handle RPC limitations and errors.
+
+getUniswapMarketsByToken: Groups the pairs returned by getUniswapMarkets by token address.
+
+updateReserves: Updates the reserves of the pair by calling the getReserves function on the pair contract.
+
+updateReservesWithMulticall: Batch updates of reserves by using the multicall contract.
+
+setReservesViaOrderedBalances: Sets the reserves using an ordered array of balances.
+
+setReservesViaMatchingArray: Unused function.
+
+getTokensOut: Calculates the output amount of tokenOut given an input amount of tokenIn.
+
+getTokensIn: Calculates the required input amount of tokenIn given an output amount of tokenOut.
+
+getReserves: Returns reserves for the pair.
+
+getPriceImpact: Returns price impact of a trade, as the percentage difference between the mid-price and the execution price.
+
+getBalance: Gets the balance of a specified token for this pair.
+
+getTradingFee: Returns a constant value as BigNumber representing the trading fee (0.3% for Uniswap V2).
+
+receiveDirectly: Checks if the market can directly receive a given token.
+
+sellTokensToNextMarket: Creates the calldata to be executed by the BundleExecutor.
+
+sellTokens: Creates the calldata for a swap operation on the current market.
+
+Strengths:
+
+Abstraction: Provides a clean interface for interacting with Uniswap V2 pairs.
+
+Batching: Uses batching for efficient data retrieval.
+
+Retry Logic: Includes retry logic for handling network errors.
+
+Potential Issues & Improvements:
+
+Hardcoded Fee: The getTradingFee method returns a hardcoded value. It should fetch the fee from the contract.
+
+Redundant getTokensOut and getAmountOut: These two functions seem to do the same thing.
+
+No Error Handling for sync(): The sync() method in the UniswapV2Pair contract is not handled. It should be called periodically to update the reserves. The update should be handled by the updateReserves method.
+
+Static Methods: getUniswapMarkets and getUniswapMarketsByToken are static methods. This makes them less flexible. It would be better to make them instance methods, allowing for different configurations (e.g., different BATCH_SIZE values).
+
+Use of any for batchPairs[0]: Avoid using any and create a more specific type.
+
+setReservesViaMatchingArray: This method is not used and can likely be removed.
+
+src/services/MevShareService.ts
+This class handles the interaction with the Flashbots MEV-Share relay. It is used to submit transaction bundles.
+
+Purpose: To connect to the Flashbots relay and submit transaction bundles.
+
+Key Members:
+
+wallet: The Ethereum wallet used for signing transactions.
+
+provider: The Ethereum provider.
+
+config: Configuration options for the MEV-Share service.
+
+flashbotsProvider: An instance of the FlashbotsBundleProvider.
+
+circuitBreaker: An instance of the CircuitBreaker to prevent excessive failed submissions.
+
+Key Methods:
+
+connect: Establishes a connection to the Flashbots relay.
+
+submitBundle: Simulates and submits a bundle of transactions to the Flashbots relay. It checks for profitability before submission.
+
+stop: Stops the service.
+
+isActive: Returns true if the service is active and the circuit breaker is not tripped.
+
+on: Allows subscribing to events emitted by this service.
+
+Strengths:
+
+Clear Abstraction: Provides a clean interface for interacting with Flashbots.
+
+Simulation: Includes bundle simulation to check for errors and profitability before submission.
+
+Circuit Breaker: Integrates a circuit breaker to prevent sending too many failing bundles.
+
+Potential Issues & Improvements:
+
+Hardcoded URL: The Flashbots relay URL is hardcoded. It should be configurable via environment variables.
+
+No Bundle Cancellation: There's no mechanism for canceling a submitted bundle.
+
+Limited Error Information: The error property in SimulationResult might contain more detailed information that could be used for debugging. Consider logging the full error object.
+
+Missing MEV-Share Features: The code does not use the MEV-Share specific features, such as transaction hints.
+
+src/services/MulticallService.ts
+This class provides a utility for making multiple Ethereum contract calls in a single batch using the Multicall2 contract.
+
+Purpose: To improve efficiency by reducing the number of RPC calls.
+
+Key Members:
+
+multicallContract: An instance of the Contract object for the Multicall2 contract.
+
+MULTICALL2_ADDRESS: The address of the Multicall2 contract on mainnet.
+
+BATCH_SIZE: The maximum number of calls to include in a single batch.
+
+Key Methods:
+
+chunkCalls: Splits an array of MulticallRequest objects into smaller chunks.
+
+multicall: Executes a batch of calls using the Multicall2 contract.
+
+getTokenData: Fetches the balance and total supply for a list of token addresses.
+
+Strengths:
+
+Efficiency: Reduces RPC calls by batching multiple calls into one.
+
+Error Handling: Includes basic error handling for failed calls and decoding errors.
+
+Potential Issues & Improvements:
+
+Hardcoded Address: The MULTICALL2_ADDRESS is hardcoded to the mainnet address. It should be configurable or automatically determined based on the network.
+
+Limited Functionality: It only supports a limited set of calls. It could be extended to support more general-purpose calls.
+
+No Retries: The code does not include any retry logic for failed calls.
+
+src/utils/CircuitBreaker.ts
+This class implements the circuit breaker pattern.
+
+Purpose: To prevent the bot from making repeated calls to external services (e.g., RPC providers, Flashbots relay) when those services are experiencing issues.
+
+Key Members:
+
+config: Configuration for the circuit breaker (max failures, reset timeout, cooldown period).
+
+failures: Counter for the number of consecutive failures.
+
+lastFailureTime: Timestamp of the last failure.
+
+isOpen: Boolean flag indicating whether the circuit breaker is tripped.
+
+resetTimeout: Timeout ID for the automatic reset mechanism.
+
+Key Methods:
+
+recordFailure: Increments the failure count and trips the breaker if the threshold is reached.
+
+recordSuccess: Resets the failure count.
+
+isTripped: Returns true if the circuit breaker is tripped.
+
+reset: Resets the circuit breaker.
+
+Strengths:
+
+Simple and Effective: Provides a basic but effective circuit breaker implementation.
+
+Configurable: Allows customization of the failure threshold, reset timeout, and cooldown period.
+
+Potential Issues & Improvements:
+
+More Granular Control: The current implementation is global. It might be beneficial to have separate circuit breakers for different services (e.g., one for the Ethereum provider and one for the Flashbots provider).
+
+Monitoring: Consider adding more detailed monitoring of circuit breaker state transitions.
+
+src/utils/GasPriceManager.ts
+This class provides functionality for managing and optimizing gas prices.
+
+Purpose: To estimate optimal gas prices for transactions, considering both current network conditions and historical data.
+
+Key Members:
+
+provider: The Ethereum provider.
+
+config: Configuration for gas price limits and strategy.
+
+lastBaseFee: The base fee from the last block.
+
+historicalBaseFees: An array of recent base fees, used for calculating the average.
+
+Key Methods:
+
+updateBaseFee: Fetches the latest block and updates the lastBaseFee and historicalBaseFees.
+
+getOptimalGasFees: Calculates the optimal maxFeePerGas and maxPriorityFeePerGas based on the current and average base fees, and a configured premium.
+
+isGasProfitable: Checks if a given profit is sufficient to cover the estimated gas cost, considering a minimum profit multiplier.
+
+getHistoricalBaseFees: Returns a copy of the historical base fees.
+
+getLastBaseFee: Returns the last base fee.
+
+Strengths:
+
+Dynamic Gas Price: Adapts to changing network conditions.
+
+Configurable: Allows setting maximum gas price and priority fee limits.
+
+Profitability Check: Includes a method to check if a trade is likely to be profitable after gas costs.
+
+Potential Issues & Improvements:
+
+Gas Price Volatility: Gas prices can be highly volatile. The current implementation might not be responsive enough to rapid spikes. Consider using a more sophisticated gas price oracle or incorporating a feedback loop based on actual transaction confirmation times.
+
+EIP-1559 Specific: The code is specifically designed for EIP-1559 transactions. It would need to be adapted for networks that don't support EIP-1559.
+
+Average Base Fee: The current implementation takes a simple average of the last 20 base fees, which might not be the best way to capture the current gas price trend. Consider using an exponential moving average or a more sophisticated statistical model.
+
+Bundle Competition: Could implement logic to monitor competing bundles and increase gas prices.
+
+src/index.ts
+This is the main entry point for the bot when using standard JSON-RPC.
+
+Purpose: Initializes the bot, connects to the Ethereum network and Flashbots, fetches market data, and starts the arbitrage monitoring loop.
+
+Key Functionality:
+
+Loads environment variables.
+
+Initializes the Ethereum provider and wallets.
+
+Creates Arbitrage and EnhancedWebSocketManager instances.
+
+Fetches initial market data using UniswapV2EthPair.getUniswapMarketsByToken.
+
