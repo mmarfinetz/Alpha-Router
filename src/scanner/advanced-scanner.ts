@@ -19,7 +19,7 @@ const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL || 'https://eth-mainnet.g.
 const SCAN_INTERVAL_MS = 30000; // 30 seconds
 const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
 const BUNDLE_EXECUTOR_ADDRESS = process.env.BUNDLE_EXECUTOR_ADDRESS || '';
-const MIN_PROFIT_THRESHOLD = ethers.utils.parseEther('0.01'); // 0.01 ETH
+const MIN_PROFIT_THRESHOLD = ethers.utils.parseEther('0.005'); // 0.005 ETH (reduced from 0.01)
 const MAX_ATTEMPTS = 3;
 
 // Token symbols for better display

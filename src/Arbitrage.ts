@@ -13,12 +13,12 @@ import { Provider } from "@ethersproject/providers";
 import { TransactionResponse } from "@ethersproject/providers";
 import { MarketThresholds, DEFAULT_THRESHOLDS } from './config/thresholds.js';
 import { EnhancedWebSocketManager } from "./websocketmanager.js";
-import { CFMM, UniswapV2CFMM } from "./cfmm/CFMM.js";
-import { UtilityFunction, SimpleArbitrageUtility } from "./utility/UtilityFunction.js";
-import { HybridOptimizer } from './optimization/HybridOptimizer.js';
+import { AnalyticalArbitrageEngine, AnalyticalEngineConfig } from './engines/AnalyticalArbitrageEngine.js';
+import { CrossDEXScanner, ScannerConfig } from './scanners/CrossDEXScanner.js';
 import { logInfo, logError, logDebug, logWarn } from './utils/logger.js';
 import { CircuitBreaker } from './utils/CircuitBreaker.js';
 import { GasPriceManager } from './utils/GasPriceManager.js';
+import { AGGRESSIVE_MARKET_FILTERS } from './config/marketFilters.js';
 
 export { MarketsByToken, CrossedMarketDetails } from './types.js';
 
@@ -143,6 +143,11 @@ export class Arbitrage {
     private readonly circuitBreaker: CircuitBreaker;
     private readonly gasPriceManager: GasPriceManager;
     private readonly WETH_ADDRESS: string;
+    private readonly analyticalEngine: AnalyticalArbitrageEngine;
+    private readonly crossDexScanner: CrossDEXScanner;
+    private readonly MAX_RETRIES = 3;
+    private readonly RETRY_DELAY = 2000; // 2 seconds
+    private flashbotsProvider: FlashbotsBundleProvider | null = null;
 
     constructor(
         wallet: Wallet,
@@ -160,208 +165,102 @@ export class Arbitrage {
         this.circuitBreaker = circuitBreaker;
         this.gasPriceManager = gasPriceManager;
         this.WETH_ADDRESS = wethAddress;
+
+        // Initialize analytical engine with proper configuration
+        const analyticalConfig: AnalyticalEngineConfig = {
+            minProfitWei: thresholds.minProfitWei || BigNumber.from('10000000000000000'), // 0.01 ETH
+            maxGasPriceGwei: BigNumber.from('100'), // 100 Gwei max
+            maxSlippagePercent: 1.0, // 1% max slippage
+            maxTradePercentOfLiquidity: 20, // Max 20% of pool liquidity
+            gasCostPerSwap: BigNumber.from('350000') // Conservative gas estimate
+        };
+
+        this.analyticalEngine = new AnalyticalArbitrageEngine(analyticalConfig);
+
+        // Initialize cross-DEX scanner
+        const scannerConfig: ScannerConfig = {
+            minSpreadBasisPoints: 50, // 0.5% minimum spread
+            maxLatencyMs: 30000, // 30 seconds max data age
+            batchSize: 10, // Process 10 markets at a time
+            minLiquidityWei: thresholds.minLiquidityWei || BigNumber.from('1000000000000000000'), // 1 ETH
+            maxGasPriceGwei: BigNumber.from('100'),
+            marketFilters: AGGRESSIVE_MARKET_FILTERS,
+            enableDetailedLogging: false,
+            enableTriangularArbitrage: false
+        };
+
+        this.crossDexScanner = new CrossDEXScanner(provider, scannerConfig, analyticalConfig);
+    }
+
+    public async initializeFlashbots(signingWallet: Wallet): Promise<void> {
+        if (!this.flashbotsProvider) {
+            this.flashbotsProvider = await FlashbotsBundleProvider.create(this.provider as any, signingWallet);
+            logInfo('Flashbots provider initialized');
+        }
+    }
+
+    private async checkBundleGas(bundleGas: BigNumber): Promise<boolean> {
+        const isValid = bundleGas.gte(42000);
+        logDebug('Bundle gas check', {
+            bundleGas: bundleGas.toString(),
+            isValid
+        });
+        return isValid;
     }
 
     public async evaluateMarkets(
         marketsByToken: MarketsByToken
     ): Promise<CrossedMarketDetails[]> {
-        logInfo('Starting market evaluation using hybrid optimization...');
-
-        const opportunities: CrossedMarketDetails[] = [];
+        logInfo('Starting market evaluation using analytical arbitrage engine...');
 
         try {
-            // Update reserves for all markets
+            // Update reserves for all markets first
             for (const markets of Object.values(marketsByToken)) {
                 await Promise.all(markets.map(market => (market as MarketType).updateReserves()));
             }
 
-            // Convert markets to CFMM format
-            const cfmmNetwork = await this.convertMarketsToNetwork(marketsByToken);
+            // Use the cross-DEX scanner for comprehensive opportunity detection
+            const arbitrageOpportunities = await this.crossDexScanner.scanForOpportunities(marketsByToken);
 
-            // Create utility function
-            const utility: UtilityFunction = {
-                U: (delta: BigNumber[]) => {
-                    // Simple quadratic utility function
-                    return delta.reduce((a, b) => a.add(b.mul(b)), BigNumber.from(0));
-                },
-                U_optimal: (v: BigNumber[]) => {
-                    // Simple quadratic utility function
-                    const value = v.reduce((a, b) => a.add(b.mul(b)), BigNumber.from(0));
-                    const gradient = v.map(vi => vi.mul(2));
-                    return { value, gradient };
-                }
-            };
+            // Convert to CrossedMarketDetails format for compatibility
+            const crossedMarkets = this.analyticalEngine.convertToCrossedMarketDetails(arbitrageOpportunities);
 
-            // Create and configure optimizer
-            const optimizer = new HybridOptimizer(
-                cfmmNetwork,
-                utility,
-                {
-                    maxIterations: 100,
-                    tolerance: 1e-6,
-                    memory: 10
-                }
-            );
+            logInfo(`Analytical evaluation completed - Found ${crossedMarkets.length} opportunities`, {
+                profit: crossedMarkets.reduce((sum, opp) => sum.add(opp.profit), BigNumber.from(0))
+            });
 
-            // Run optimization
-            const initialV = cfmmNetwork.map(() => BigNumber.from('1000000000000000000')); // 1 ETH initial price
-            const result = await optimizer.optimize(initialV);
-
-            logInfo(`Optimization completed: converged=${result.converged}, iterations=${result.iterations}`);
-            logDebug(`Final dual value: ${result.dualValue.toString()}`);
-
-            if (result.converged && result.dualValue.gt(this.thresholds.minProfitThreshold)) {
-                // Convert optimization result to CrossedMarketDetails
-                const crossedMarkets = await this.convertOptimizationResult(result, marketsByToken);
-                opportunities.push(...crossedMarkets);
+            // Log detailed information about top opportunities
+            if (crossedMarkets.length > 0) {
+                const topOpportunity = crossedMarkets[0];
+                logInfo('Top arbitrage opportunity found', {
+                    marketAddress: topOpportunity.buyFromMarket.marketAddress,
+                    tokenAddress: topOpportunity.tokenAddress,
+                    profit: topOpportunity.profit
+                });
             }
+
+            return crossedMarkets;
+
         } catch (error) {
-            logError('Error in market evaluation', {
+            logError('Error in analytical market evaluation', {
                 error: error instanceof Error ? error : new Error(String(error))
             });
-        }
-
-        return opportunities;
-    }
-
-    private async convertMarketsToNetwork(marketsByToken: MarketsByToken): Promise<CFMM[]> {
-        const cfmmNetwork: CFMM[] = [];
-
-        for (const [tokenAddress, markets] of Object.entries(marketsByToken)) {
-            for (const market of markets) {
-                const marketWithReserves = market as MarketType;
-                const reserves = await marketWithReserves.getReservesByToken();
-                
-                if (!Array.isArray(reserves)) {
-                    throw new Error('Expected array of reserves');
-                }
-
-                const cfmm: CFMM = {
-                    reserves,
-                    fee: 0.003, // 0.3% fee for Uniswap V2
-                    A: [[1, 0], [0, 1]], // Identity matrix for simple case
-                    marketAddress: marketWithReserves.marketAddress,
-                    tradingFunction: (r: BigNumber[]) => {
-                        return r[0].mul(r[1]); // x * y = k
-                    },
-                    tradingFunctionGradient: (r: BigNumber[]) => {
-                        return [r[1], r[0]]; // [y, x]
-                    },
-                    arbitrage: async (prices: BigNumber[]) => {
-                        const currentReserves = await marketWithReserves.getReservesByToken();
-                        if (!Array.isArray(currentReserves)) {
-                            throw new Error('Expected array of reserves');
-                        }
-                        const optimalDelta = await this.calculateOptimalDelta(currentReserves, prices);
-                        const value = optimalDelta.reduce((a, b) => a.add(b), BigNumber.from(0));
-                        return { delta: optimalDelta, value };
-                    },
-                    updateReserves: async () => {
-                        await marketWithReserves.updateReserves();
-                    }
-                };
-
-                cfmmNetwork.push(cfmm);
-            }
-        }
-
-        return cfmmNetwork;
-    }
-
-    private async calculateOptimalDelta(reserves: BigNumber[], prices: BigNumber[]): Promise<BigNumber[]> {
-        // Simple implementation - can be improved
-        const price0 = prices[0];
-        const price1 = prices[1];
-        const reserve0 = reserves[0];
-        const reserve1 = reserves[1];
-
-        // Calculate optimal trade size based on price difference
-        const priceDiff = price1.sub(price0);
-        if (priceDiff.gt(0)) {
-            // Buy token0, sell token1
-            const delta0 = reserve0.mul(20).div(100); // Use 20% of reserves as a conservative estimate
-            const delta1 = delta0.mul(price0).div(BigNumber.from('1000000000000000000')); // Scale by 1e18
-            return [delta0, delta1.mul(-1)];
-        } else {
-            // Buy token1, sell token0
-            const delta1 = reserve1.mul(20).div(100);
-            const delta0 = delta1.mul(price1).div(BigNumber.from('1000000000000000000'));
-            return [delta0.mul(-1), delta1];
+            return [];
         }
     }
 
-    private async convertOptimizationResult(
-        result: { v: BigNumber[]; dualValue: BigNumber },
-        marketsByToken: MarketsByToken
-    ): Promise<CrossedMarketDetails[]> {
-        const opportunities: CrossedMarketDetails[] = [];
 
-        // Group markets by token pairs
-        for (const [tokenAddress, markets] of Object.entries(marketsByToken)) {
-            for (let i = 0; i < markets.length; i++) {
-                for (let j = i + 1; j < markets.length; j++) {
-                    const market1 = markets[i] as MarketType;
-                    const market2 = markets[j] as MarketType;
-
-                    try {
-                        // Calculate potential profit using optimization results
-                        const reserves1 = await market1.getReservesByToken();
-                        const reserves2 = await market2.getReservesByToken();
-                        if (!Array.isArray(reserves1) || !Array.isArray(reserves2)) {
-                            throw new Error('Expected array of reserves');
-                        }
-
-                        const optimalDelta1 = await this.calculateOptimalDelta(reserves1, [result.v[i], result.v[j]]);
-                        const optimalDelta2 = await this.calculateOptimalDelta(reserves2, [result.v[j], result.v[i]]);
-
-                        // Estimate profit (simplified)
-                        const profit = optimalDelta1[0].mul(result.v[i])
-                            .add(optimalDelta1[1].mul(result.v[j]))
-                            .add(optimalDelta2[0].mul(result.v[j]))
-                            .add(optimalDelta2[1].mul(result.v[i]));
-
-                        if (profit.gt(this.thresholds.minProfitThreshold)) {
-                            opportunities.push({
-                                buyFromMarket: market1,
-                                sellToMarket: market2,
-                                volume: optimalDelta1[0].abs(),
-                                profit,
-                                marketPairs: [
-                                    {
-                                        market: market1,
-                                        tokens: market1.tokens
-                                    },
-                                    {
-                                        market: market2,
-                                        tokens: market2.tokens
-                                    }
-                                ],
-                                tokenAddress: this.WETH_ADDRESS
-                            });
-                        }
-                    } catch (error) {
-                        logError('Error calculating opportunity', {
-                            error: error instanceof Error ? error : new Error(String(error)),
-                            marketAddress: market1.marketAddress
-                        });
-                        continue;
-                    }
-                }
-            }
-        }
-
-        return opportunities;
-    }
 
     async takeCrossedMarkets(
         markets: CrossedMarketDetails[],
         currentBlock: number,
-        maxAttempts: number
+        maxAttempts: number,
+        minerRewardPercentage: number = 80
     ): Promise<void> {
         for (const market of markets) {
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
-                    const transaction = await this.executeArbitrageTrade(market, currentBlock);
+                    const transaction = await this.executeArbitrageTrade(market, currentBlock, minerRewardPercentage);
                     if (transaction) {
                         logInfo(`Successful arbitrage execution`, { 
                             txHash: transaction.hash,
@@ -385,7 +284,14 @@ export class Arbitrage {
                             blockNumber: currentBlock
                         });
                     } else {
-                        await new Promise(r => setTimeout(r, this.RETRY_DELAY));
+                        // Exponential backoff: delay increases with each attempt
+                        const exponentialDelay = this.RETRY_DELAY * Math.pow(2, attempt - 1);
+                        const jitteredDelay = exponentialDelay + Math.random() * 1000; // Add jitter
+                        logInfo(`Retrying after exponential backoff delay`, {
+                            attempt,
+                            maxAttempts
+                        });
+                        await new Promise(r => setTimeout(r, jitteredDelay));
                     }
                 }
             }
@@ -552,7 +458,8 @@ export class Arbitrage {
 
     private async executeArbitrageTrade(
         market: CrossedMarketDetails,
-        blockNumber: number
+        blockNumber: number,
+        minerRewardPercentage: number = 80
     ): Promise<TransactionResponse | null> {
         // Prepare the trade calls
         const buyCalls = await market.buyFromMarket.sellTokensToNextMarket(
@@ -579,8 +486,8 @@ export class Arbitrage {
         const targets = [...buyCalls.targets, market.sellToMarket.marketAddress];
         const payloads = [...buyCalls.data, sellCallData];
 
-        // Calculate miner reward (90% of profit)
-        const minerReward = market.profit.mul(90).div(100);
+        // Calculate miner reward using configurable percentage
+        const minerReward = market.profit.mul(minerRewardPercentage).div(100);
 
         // Create and simulate bundle
         const bundle = await this.createBundle(
@@ -661,6 +568,11 @@ export class Arbitrage {
                 // Simulation first
                 await this.simulateBundle(bundle, blockNumber);
 
+                // Check if flashbotsProvider is initialized
+                if (!this.flashbotsProvider) {
+                    throw new Error('Flashbots provider not initialized');
+                }
+
                 // If simulation successful, submit
                 const response = await this.flashbotsProvider.sendBundle(
                     bundle.map(entry => ({
@@ -690,7 +602,14 @@ export class Arbitrage {
                     blockNumber
                 });
                 if (i === this.MAX_RETRIES - 1) throw error;
-                await new Promise(r => setTimeout(r, this.RETRY_DELAY));
+                // Exponential backoff with jitter
+                const exponentialDelay = this.RETRY_DELAY * Math.pow(2, i);
+                const jitteredDelay = exponentialDelay + Math.random() * 1000;
+                logInfo(`Bundle retry after exponential backoff`, {
+                    attempt: i + 1,
+                    retries: this.MAX_RETRIES
+                });
+                await new Promise(r => setTimeout(r, jitteredDelay));
             }
         }
         return null;
@@ -715,6 +634,10 @@ export class Arbitrage {
     }
 
     private async simulateBundle(bundle: BundleEntry[], blockNumber: number): Promise<void> {
+        if (!this.flashbotsProvider) {
+            throw new Error('Flashbots provider not initialized');
+        }
+        
         const stringBundle = bundle.map(entry => entry.signedTransaction);
         const simulation = await this.flashbotsProvider.simulate(stringBundle, blockNumber);
 
@@ -775,6 +698,9 @@ export class Arbitrage {
 
             // Submit bundle
             const targetBlockNumber = blockNumber + 1;
+            if (!this.flashbotsProvider) {
+                throw new Error('Flashbots provider not initialized');
+            }
             const bundleSubmission = await this.flashbotsProvider.sendBundle(
                 bundle.map(entry => ({
                     signedTransaction: entry.signedTransaction,
@@ -995,14 +921,6 @@ export class Arbitrage {
 }
 
 // Helper functions
-async function checkBundleGas(bundleGas: BigNumber): Promise<boolean> {
-    const isValid = bundleGas.gte(42000);
-    logDebug('Bundle gas check', {
-        bundleGas: bundleGas.toString(),
-        isValid
-    });
-    return isValid;
-}
 
 export async function monitorCompetingBundlesGasPrices(blocksApi: { getRecentBlocks: () => any; }): Promise<Array<BigNumber>> {
     logInfo("Starting competing bundles gas price monitoring");

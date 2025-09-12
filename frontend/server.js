@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', 'arbitrage-bot', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { Server } = require('socket.io');
 const os = require('os');
@@ -207,7 +207,24 @@ function parseBotLogs() {
       return;
     }
     
-    const logs = fs.readFileSync(logPath, 'utf8').split('\n');
+    // Get file stats to check size
+    const stats = fs.statSync(logPath);
+    const fileSizeInMB = stats.size / (1024 * 1024);
+    
+    let logs;
+    if (fileSizeInMB > 100) {
+      // For large files, read only the last part
+      console.log(`Log file is ${fileSizeInMB.toFixed(2)}MB, reading tail only...`);
+      const fileDescriptor = fs.openSync(logPath, 'r');
+      const bufferSize = 1024 * 1024; // 1MB buffer
+      const buffer = Buffer.alloc(bufferSize);
+      const position = Math.max(0, stats.size - bufferSize);
+      fs.readSync(fileDescriptor, buffer, 0, bufferSize, position);
+      fs.closeSync(fileDescriptor);
+      logs = buffer.toString('utf8').split('\n');
+    } else {
+      logs = fs.readFileSync(logPath, 'utf8').split('\n');
+    }
     
     // Process last 1000 lines at most
     const recentLogs = logs.slice(-1000);

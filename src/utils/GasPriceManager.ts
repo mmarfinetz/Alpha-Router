@@ -24,10 +24,10 @@ export class GasPriceManager {
     constructor(
         private provider: providers.Provider,
         private config: GasPriceConfig = {
-            maxFeePerGas: BigNumber.from("500000000000"), // 500 gwei
-            maxPriorityFeePerGas: BigNumber.from("3000000000"), // 3 gwei
-            minProfitMultiplier: 1.1, // 10% minimum profit after gas
-            priorityFeePremium: 1.2 // 20% premium on priority fee
+            maxFeePerGas: BigNumber.from("100000000000"), // 100 gwei (reduced from 500)
+            maxPriorityFeePerGas: BigNumber.from("2000000000"), // 2 gwei (reduced from 3)
+            minProfitMultiplier: 1.05, // 5% minimum profit after gas (reduced from 10%)
+            priorityFeePremium: 1.1 // 10% premium on priority fee (reduced from 20%)
         }
     ) {}
 

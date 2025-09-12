@@ -1,7 +1,13 @@
 import { BigNumber } from "@ethersproject/bignumber";
-import { BuyCalls } from "./types.js";
 import { Contract } from '@ethersproject/contracts';
 import { Provider } from '@ethersproject/providers';
+
+export interface BuyCalls {
+    targets: string[];
+    data: string[];
+    payloads: string[];
+    values: BigNumber[];
+}
 
 export interface CallDetails {
     target: string;

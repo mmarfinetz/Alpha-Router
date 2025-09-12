@@ -36,8 +36,6 @@
     "coverage",
     "src/scanner/advanced-scanner.ts",
     "src/scanner/market-scanner.ts",
-    "src/cfmm/CFMM.ts",
-    "src/utility/UtilityFunction.ts",
     "test/**/*",
     "scripts/deploy.ts"
   ],

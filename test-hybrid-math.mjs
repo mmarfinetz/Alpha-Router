@@ -1,5 +1,5 @@
 const { BigNumber } = await import('@ethersproject/bignumber');
-const { HybridOptimizer } = await import('./dist/src/optimization/HybridOptimizer.js');
+const { HybridOptimizer } = await import('./build/src/optimization/HybridOptimizer.js');
 
 console.log('🧮 Mathematical Verification of HybridOptimizer');
 console.log('================================================\n');

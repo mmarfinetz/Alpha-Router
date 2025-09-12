@@ -237,6 +237,19 @@ export interface LogContext {
     minLiquidityETH?: string;
     minVolume24H?: string;
     maxPriceImpact?: string;
+    // Provider and performance metrics
+    timeout?: number;
+    providersConfigured?: number;
+    batchServiceEnabled?: boolean;
+    priority?: number;
+    failures?: number;
+    // Performance monitoring
+    requestCount?: number;
+    timeoutRate?: string;
+    avgResponseTime?: string;
+    p95ResponseTime?: string;
+    timespan?: string;
+    recommendations?: string;
     maxPairsPerToken?: number;
     pairCount?: number;
     updatedPairCount?: number;
@@ -254,6 +267,9 @@ export interface LogContext {
     batchIndex?: number;
     // Additional properties for WebSocket events
     rpcCallTimeout?: string;         // RPC call timeout setting
+    // DEX-specific properties
+    dexName?: string;                // Name of the DEX being analyzed
+    factoryAddress?: string;         // Factory address for the DEX
     progress?: string;               // Progress percentage
     consecutiveFailures?: number;    // Number of consecutive failures
     totalErrors?: number;            // Total error count
@@ -287,8 +303,7 @@ export interface LogContext {
     penaltyResult?: number;
     finalNu?: number;
     finalPsi?: number;
-    // Market analysis properties
-    factoryAddress?: string;
+    // Market analysis properties - removed duplicate factoryAddress
     totalPairs?: number;
     batchSize?: number;
     concurrentRequests?: number;

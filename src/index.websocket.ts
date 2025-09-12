@@ -1,5 +1,7 @@
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 import { Contract, providers, Wallet } from "ethers";
+import { ProviderManager, DEFAULT_PROVIDER_CONFIGS } from "./services/ProviderManager.js";
+import { BatchService } from "./services/BatchService.js";
 import { BUNDLE_EXECUTOR_ABI } from "./abi.js";
 import { UniswapV2EthPair } from "./UniswapV2EthPair.js";
 import { FACTORY_ADDRESSES } from "./addresses.js";
@@ -76,6 +78,17 @@ process.on('unhandledRejection', (reason, promise) => {
   // Don't exit the process, let it continue
 });
 
+// Add graceful shutdown handling
+process.on('SIGINT', async () => {
+    logInfo('Received SIGINT - starting graceful shutdown...');
+    // Will be set up in main function
+});
+
+process.on('SIGTERM', async () => {
+    logInfo('Received SIGTERM - starting graceful shutdown...');
+    // Will be set up in main function
+});
+
 // Add memory monitoring
 const logMemoryUsage = () => {
   const used = process.memoryUsage();
@@ -95,12 +108,18 @@ async function main() {
     logInfo("Starting MEV searcher with WebSocket...");
     
     try {
-        // Initialize HTTP provider for standard JSON-RPC calls
+        // Initialize HTTP provider for standard JSON-RPC calls with optimized timeouts
         logInfo('Initializing HTTP Provider...');
-        const provider = new providers.StaticJsonRpcProvider(ETHEREUM_RPC_URL);
-        provider.pollingInterval = parseInt(process.env.PROVIDER_TIMEOUT || "300000");
-        logInfo('HTTP Provider initialized', { 
-            url: ETHEREUM_RPC_URL,
+        const provider = new providers.StaticJsonRpcProvider({
+            url: ETHEREUM_RPC_URL!,
+            timeout: 10000, // 10 seconds instead of default 120s
+            throttleLimit: 10, // Limit concurrent requests
+            throttleSlotInterval: 100 // 100ms between requests
+        });
+        provider.pollingInterval = 5000; // 5 seconds for faster block detection
+        logInfo('HTTP Provider initialized with optimized timeouts', { 
+            url: ETHEREUM_RPC_URL || 'Not configured',
+            timeout: 10000,
             pollingInterval: provider.pollingInterval 
         });
 
@@ -132,6 +151,15 @@ async function main() {
             maxGasPrice: process.env.MAX_GAS_PRICE || "Auto (dynamic)",
             gasOptimizationStrategy: "Dynamic adjustment based on network conditions and profit opportunity",
             maxPositionSize: process.env.MAX_POSITION_SIZE || "Auto (based on liquidity)"
+        });
+
+        // Initialize enhanced provider manager and batch service
+        const providerManager = new ProviderManager(DEFAULT_PROVIDER_CONFIGS);
+        const batchService = new BatchService(providerManager);
+        
+        logInfo('Enhanced services initialized', {
+            providersConfigured: DEFAULT_PROVIDER_CONFIGS.length,
+            batchServiceEnabled: true
         });
 
         // Initialize arbitrage instance
@@ -203,6 +231,24 @@ async function main() {
         await wsManager.connect();
         logInfo('✅ WebSocket connected successfully - real-time monitoring ACTIVE');
 
+        // Set up graceful shutdown handlers
+        const gracefulShutdown = async () => {
+            logInfo('Starting graceful shutdown...');
+            try {
+                await wsManager.disconnect();
+                logInfo('WebSocket manager disconnected');
+                process.exit(0);
+            } catch (error) {
+                logError('Error during shutdown', { error: error as Error });
+                process.exit(1);
+            }
+        };
+        
+        process.removeAllListeners('SIGINT');
+        process.removeAllListeners('SIGTERM');
+        process.on('SIGINT', gracefulShutdown);
+        process.on('SIGTERM', gracefulShutdown);
+        
         logInfo("🚀 WebSocket MEV bot initialization COMPLETE!");
         logInfo("⚡ TRANSITIONING TO ACTIVE TRADING MODE - Bot is now monitoring for arbitrage opportunities");
 
@@ -211,69 +257,97 @@ async function main() {
         logInfo('🎯 MEV BOT STARTUP COMPLETE - MARKET DISCOVERY FINISHED');
         logInfo('═'.repeat(80));
         logInfo(`📊 DISCOVERY PHASE COMPLETE - Found ${flattenArray(Object.values(markets.marketsByToken)).length} total markets, ${markets.allMarketPairs.length} active pairs`);
-        logInfo('⚡ ACTIVE TRADING PHASE: Continuous evaluation every 30s, WebSocket events active, reserves update every 5 blocks');
+        logInfo('⚡ ACTIVE TRADING PHASE: Coordinated evaluation every 30s, WebSocket events active, health monitoring every 2 blocks');
+        logInfo('🔧 ENHANCED FEATURES: Memory leak protection, operation deduplication, graceful shutdown');
         logInfo('═'.repeat(80));
 
-        // Continuous arbitrage evaluation loop - runs independently of WebSocket events
-        logInfo('🔄 Starting continuous arbitrage evaluation loop...');
-        setInterval(async () => {
-            try {
-                logDebug('Running periodic arbitrage evaluation...');
-                
-                // Update reserves first
-                if (markets.allMarketPairs.length > 0) {
-                    const updatedPairs = await UniswapV2EthPair.updateReserves(
-                        provider, 
-                        markets.allMarketPairs,
-                        WETH_ADDRESS
-                    );
-                    markets.allMarketPairs = updatedPairs.filter((pair): pair is UniswapV2EthPair => pair !== undefined);
+        // Coordinated operation manager to prevent conflicts
+        const operationManager = {
+            isRunning: false,
+            lastUpdate: 0,
+            MIN_INTERVAL: 10000, // Minimum 10 seconds between updates
+            
+            async runCoordinatedUpdate(source: string) {
+                const now = Date.now();
+                if (this.isRunning || (now - this.lastUpdate) < this.MIN_INTERVAL) {
+                    logDebug(`Skipping ${source} update - operation in progress or too soon`);
+                    return;
                 }
-
-                // Evaluate markets for arbitrage opportunities
-                const opportunities = await arbitrage.evaluateMarkets(markets.marketsByToken);
                 
-                if (opportunities.length > 0) {
-                    logInfo(`💰 Found ${opportunities.length} arbitrage opportunities in periodic evaluation - Max profit: ${opportunities[0].profit.toString()} wei`);
+                this.isRunning = true;
+                this.lastUpdate = now;
+                
+                try {
+                    logDebug(`Running coordinated update from ${source}...`);
                     
-                    // Get current block and attempt execution
-                    const currentBlock = await provider.getBlockNumber();
-                    await arbitrage.takeCrossedMarkets(opportunities, currentBlock, 3);
-                } else {
-                    logDebug('No arbitrage opportunities found in periodic evaluation');
+                    // Check WebSocket health before proceeding with operations
+                    if (!wsManager.isHealthyForTrading()) {
+                        const metrics = wsManager.getHealthMetrics();
+                        logWarn(`Skipping ${source} update - WebSocket connection unhealthy`, {
+                            error: new Error(`Connected: ${metrics.isConnected}, Healthy: ${metrics.isHealthyForTrading}`)
+                        });
+                        return;
+                    }
+                    
+                    // Update reserves first
+                    if (markets.allMarketPairs.length > 0) {
+                        const updatedPairs = await UniswapV2EthPair.updateReserves(
+                            provider, 
+                            markets.allMarketPairs,
+                            WETH_ADDRESS
+                        );
+                        markets.allMarketPairs = updatedPairs.filter((pair): pair is UniswapV2EthPair => pair !== undefined);
+                    }
+
+                    // Evaluate markets for arbitrage opportunities
+                    const opportunities = await arbitrage.evaluateMarkets(markets.marketsByToken);
+                    
+                    if (opportunities.length > 0) {
+                        logInfo(`💰 Found ${opportunities.length} arbitrage opportunities from ${source} - Max profit: ${opportunities[0].profit.toString()} wei`);
+                        
+                        // Get current block and attempt execution
+                        const currentBlock = await provider.getBlockNumber();
+                        await arbitrage.takeCrossedMarkets(opportunities, currentBlock, 3);
+                    } else {
+                        logDebug(`No arbitrage opportunities found from ${source}`);
+                    }
+                    
+                } catch (error: any) {
+                    logError(`Error in coordinated update from ${source}`, { 
+                        error: error instanceof Error ? error : new Error(error?.message || String(error))
+                    });
+                } finally {
+                    this.isRunning = false;
                 }
-                
-            } catch (error: any) {
-                logError('Error in continuous arbitrage evaluation', { 
-                    error: error instanceof Error ? error : new Error(error?.message || String(error))
-                });
             }
+        };
+
+        // Continuous arbitrage evaluation loop - coordinated with WebSocket events
+        logInfo('🔄 Starting coordinated arbitrage evaluation loop...');
+        setInterval(async () => {
+            await operationManager.runCoordinatedUpdate('periodic');
         }, 30000); // Every 30 seconds for active scanning
 
-        // Periodic reserve updates (separate from arbitrage evaluation)
+        // Expose operation manager to WebSocket manager for coordination
+        (wsManager as any).operationManager = operationManager;
+        
+        // Light periodic health check (no heavy operations)
         setInterval(async () => {
             try {
-                if (markets.allMarketPairs.length > 0) {
-                    logDebug('Starting periodic reserve update', {
-                        pairCount: markets.allMarketPairs.length
-                    });
-                    
-                    const updatedPairs = await UniswapV2EthPair.updateReserves(
-                        provider, 
-                        markets.allMarketPairs,
-                        WETH_ADDRESS
-                    );
-                    markets.allMarketPairs = updatedPairs.filter((pair): pair is UniswapV2EthPair => pair !== undefined);
-                    logInfo(`Updated reserves`, { 
-                        updatedPairCount: markets.allMarketPairs.length 
-                    });
+                const status = wsManager.getOperationStatus();
+                logDebug('System health check');
+                
+                // Force garbage collection if available
+                if (global.gc) {
+                    global.gc();
                 }
+                
             } catch (error: any) {
-                logError('Error updating reserves', { 
+                logError('Error in health check', { 
                     error: error instanceof Error ? error : new Error(error?.message || String(error))
                 });
             }
-        }, DEFAULT_CONFIG.NETWORK.BLOCK_TIME * 1000 * 5); // Every 5 blocks for reserve updates
+        }, DEFAULT_CONFIG.NETWORK.BLOCK_TIME * 1000 * 2); // Every 2 blocks for health monitoring
 
     } catch (error: any) {
         logError('Error initializing WebSocket searcher', { error: error as Error });

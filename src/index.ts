@@ -14,6 +14,7 @@ import { MarketType, MarketsByToken } from './types.js';
 import { BigNumber } from '@ethersproject/bignumber';
 import fetch from 'node-fetch';
 import { logInfo, logError, logDebug } from './utils/logger.js';
+import { MulticallService, MulticallRequest } from './services/MulticallService.js';
 
 dotenv.config();
 
@@ -77,13 +78,58 @@ function healthcheck() {
 
 async function updateReserves(markets: GroupedMarkets) {
     try {
-        await Promise.all(markets.allMarketPairs.map(async (pair) => {
-            const pairContract = new Contract(pair.marketAddress, UniswapV2EthPair.uniswapInterface.interface, provider);
-            const reserves = await pairContract.getReserves();
-            await pair.updateReserves();
+        const multicallService = new MulticallService(provider);
+        
+        // Create multicall requests for all pairs
+        const multicallRequests: MulticallRequest[] = markets.allMarketPairs.map(pair => ({
+            target: pair.marketAddress,
+            interface: new ethers.utils.Interface(["function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)"]),
+            methodName: 'getReserves',
+            params: []
         }));
+
+        logInfo(`Batching reserve updates for ${multicallRequests.length} pairs`);
+        
+        // Execute multicall
+        const results = await multicallService.multicall(multicallRequests);
+        
+        // Process results and update pairs
+        let successfulUpdates = 0;
+        for (let i = 0; i < markets.allMarketPairs.length; i++) {
+            const result = results[i];
+            if (result && result.length >= 2) {
+                try {
+                    // Update the pair's reserves directly
+                    await markets.allMarketPairs[i].setReservesViaOrderedBalances([
+                        BigNumber.from(result[0]), 
+                        BigNumber.from(result[1])
+                    ]);
+                    successfulUpdates++;
+                } catch (error) {
+                    logError(`Failed to update reserves for pair ${markets.allMarketPairs[i].marketAddress}`, {
+                        error: error as Error
+                    });
+                }
+            }
+        }
+        
+        logInfo(`Reserve update completed: ${successfulUpdates}/${markets.allMarketPairs.length} pairs updated`);
+        
     } catch (error) {
-        log("error", `Failed to update reserves: ${error}`);
+        logError(`Failed to update reserves with multicall, falling back to individual updates`, {
+            error: error as Error
+        });
+        
+        // Fallback to individual updates if multicall fails
+        await Promise.all(markets.allMarketPairs.map(async (pair) => {
+            try {
+                await pair.updateReserves();
+            } catch (pairError) {
+                logError(`Failed to update reserves for pair ${pair.marketAddress}`, {
+                    error: pairError as Error
+                });
+            }
+        }));
     }
 }
 
@@ -105,11 +151,39 @@ async function main() {
         WETH_ADDRESS
     );
 
+    // Initialize Flashbots provider in arbitrage instance
+    await arbitrage.initializeFlashbots(flashbotsRelaySigningWallet);
+
     let markets: GroupedMarkets = {
         marketsByToken: {},
         allMarketPairs: [],
-        getPriceImpact: async () => { throw new Error("Not implemented"); },
-        getTradingFee: async () => { throw new Error("Not implemented"); },
+        getPriceImpact: async (tokenAddress: string, tradeSize: BigNumber) => {
+            // Find the pair containing this token
+            const pairs = markets.allMarketPairs.filter(pair => 
+                pair.tokens.includes(tokenAddress)
+            );
+            
+            if (pairs.length === 0) {
+                throw new Error(`No pair found for token ${tokenAddress}`);
+            }
+            
+            // Use the first pair for price impact calculation
+            const pair = pairs[0];
+            const reserves = await pair.getReservesByToken(tokenAddress);
+            
+            if (Array.isArray(reserves)) {
+                throw new Error('Unexpected array of reserves');
+            }
+            
+            // Calculate price impact as percentage of trade size relative to reserves
+            // Price impact = (tradeSize / reserves) * 10000 (in basis points)
+            return tradeSize.mul(10000).div(reserves);
+        },
+        getTradingFee: async (tokenAddress: string) => {
+            // Uniswap V2 standard trading fee is 0.3% = 30 basis points
+            // Return as basis points (3000 = 0.3% when divided by 10000)
+            return BigNumber.from(30);
+        },
     };
 
     const initStart = logWithTime("Initializing markets...");
@@ -168,7 +242,7 @@ async function main() {
             
             // Execute arbitrage
             const execStart = logWithTime("Starting arbitrage execution");
-            await arbitrage.takeCrossedMarkets(bestCrossedMarkets, MINER_REWARD_PERCENTAGE, blockNumber)
+            await arbitrage.takeCrossedMarkets(bestCrossedMarkets, blockNumber, 3, MINER_REWARD_PERCENTAGE) // 3 max attempts with configurable reward
                 .then(() => {
                     logWithTime("Finished arbitrage execution", execStart);
                     healthcheck();

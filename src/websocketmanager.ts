@@ -10,6 +10,10 @@ import { logInfo, logError, logDebug, logWarn } from './utils/logger.js';
 import { EventEmitter } from 'events';
 dotenv.config();
 
+// Increase max listeners to prevent memory leak warnings during batch operations
+EventEmitter.defaultMaxListeners = 100; // Increased to handle batch operations
+process.setMaxListeners(100); // Also set process max listeners
+
 // Function to send updates to the frontend server
 async function sendUpdate(eventName: string, data: any) {
     try {
@@ -34,7 +38,7 @@ export class EnhancedWebSocketManager extends EventEmitter {
     private ws: WebSocket | null = null;
     private url: string;
     private rpcUrl: string = '';
-    private isConnected: boolean = false;
+    public isConnected: boolean = false;
     private reconnectAttempts: number = 0;
     private readonly MAX_RECONNECT_ATTEMPTS = 10;
     private readonly RECONNECT_DELAY = 5000; // 5 seconds, increasing with backoff
@@ -42,12 +46,24 @@ export class EnhancedWebSocketManager extends EventEmitter {
     private pingInterval: NodeJS.Timeout | null = null;
     private subscriptions: Map<string, { id: string, params: any }> = new Map();
     private pendingRequests: Map<string, { resolve: Function, reject: Function, timestamp: number }> = new Map();
-    private readonly REQUEST_TIMEOUT = 30000; // 30 seconds
+    private readonly REQUEST_TIMEOUT = 10000; // 10 seconds for MEV operations
     private nextId: number = 1;
+    
+    // Health monitoring and circuit breaker properties
+    private lastSuccessfulPing: number = Date.now();
+    private lastBlockReceived: number = Date.now();
+    private consecutiveFailures: number = 0;
+    private readonly MAX_CONSECUTIVE_FAILURES = 3;
+    private readonly STALE_DATA_THRESHOLD = 60000; // 1 minute
+    private readonly PING_FAILURE_THRESHOLD = 120000; // 2 minutes
     private config: Config;
     private arbitrage: Arbitrage;
     private marketsByToken: MarketsByToken;
     private metrics: any = {};
+    private timeoutChecker: NodeJS.Timeout | null = null;
+    private operationLocks: Set<string> = new Set(); // Prevent duplicate operations
+    private abortControllers: Map<string, AbortController> = new Map(); // Track abort controllers
+    public operationManager: any = null; // Will be injected by main process
 
     constructor(
         wsUrl: string,
@@ -205,11 +221,15 @@ export class EnhancedWebSocketManager extends EventEmitter {
         }
 
         // Send a ping every 30 seconds to keep the connection alive
-        this.pingInterval = setInterval(() => {
+        this.pingInterval = setInterval(async () => {
             if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-                this.send('eth_blockNumber', []).catch(error => {
-                    logWarn(`Ping failed: ${error.message}`);
-                });
+                try {
+                    await this.send('eth_blockNumber', []);
+                    this.updatePingSuccess();
+                } catch (error) {
+                    logWarn(`Ping failed: ${error instanceof Error ? error.message : String(error)}`);
+                    this.recordFailure();
+                }
             }
         }, 30000);
     }
@@ -223,18 +243,36 @@ export class EnhancedWebSocketManager extends EventEmitter {
             this.pingInterval = null;
         }
 
+        if (this.timeoutChecker) {
+            clearInterval(this.timeoutChecker);
+            this.timeoutChecker = null;
+        }
+
+        // Abort all pending operations
+        for (const [key, controller] of this.abortControllers.entries()) {
+            controller.abort();
+            this.abortControllers.delete(key);
+        }
+
         // Reject all pending requests
         for (const [id, { reject }] of this.pendingRequests.entries()) {
             reject(new Error('WebSocket connection closed'));
             this.pendingRequests.delete(id);
         }
+
+        // Clear operation locks
+        this.operationLocks.clear();
     }
 
     /**
      * Check for timed-out requests
      */
     private startRequestTimeoutChecker(): void {
-        setInterval(() => {
+        if (this.timeoutChecker) {
+            clearInterval(this.timeoutChecker);
+        }
+        
+        this.timeoutChecker = setInterval(() => {
             const now = Date.now();
             for (const [id, { reject, timestamp }] of this.pendingRequests.entries()) {
                 if (now - timestamp > this.REQUEST_TIMEOUT) {
@@ -401,18 +439,24 @@ export class EnhancedWebSocketManager extends EventEmitter {
                 return;
             }
 
-            // Parse block number with validation
+            // Parse block number with validation - handle Alchemy's format
             let blockNumber: number | null = null;
             let timestamp: number | null = null;
 
-            if (event.number) {
+            // Alchemy returns block data in event.result for newHeads subscriptions
+            const blockData = event.result || event;
+            
+            // Try multiple field names for block number
+            const blockNumberValue = blockData.number || blockData.blockNumber || event.number;
+            
+            if (blockNumberValue) {
                 try {
-                    if (typeof event.number === 'string' && event.number.startsWith('0x')) {
-                        blockNumber = parseInt(event.number, 16);
-                    } else if (typeof event.number === 'number') {
-                        blockNumber = event.number;
-                    } else if (typeof event.number === 'string' && !isNaN(Number(event.number))) {
-                        blockNumber = Number(event.number);
+                    if (typeof blockNumberValue === 'string' && blockNumberValue.startsWith('0x')) {
+                        blockNumber = parseInt(blockNumberValue, 16);
+                    } else if (typeof blockNumberValue === 'number') {
+                        blockNumber = blockNumberValue;
+                    } else if (typeof blockNumberValue === 'string' && !isNaN(Number(blockNumberValue))) {
+                        blockNumber = Number(blockNumberValue);
                     }
                 } catch (error) {
                     logWarn('Failed to parse block number', { 
@@ -421,14 +465,17 @@ export class EnhancedWebSocketManager extends EventEmitter {
                 }
             }
 
-            if (event.timestamp) {
+            // Try multiple field names for timestamp
+            const timestampValue = blockData.timestamp || event.timestamp;
+            
+            if (timestampValue) {
                 try {
-                    if (typeof event.timestamp === 'string' && event.timestamp.startsWith('0x')) {
-                        timestamp = parseInt(event.timestamp, 16);
-                    } else if (typeof event.timestamp === 'number') {
-                        timestamp = event.timestamp;
-                    } else if (typeof event.timestamp === 'string' && !isNaN(Number(event.timestamp))) {
-                        timestamp = Number(event.timestamp);
+                    if (typeof timestampValue === 'string' && timestampValue.startsWith('0x')) {
+                        timestamp = parseInt(timestampValue, 16);
+                    } else if (typeof timestampValue === 'number') {
+                        timestamp = timestampValue;
+                    } else if (typeof timestampValue === 'string' && !isNaN(Number(timestampValue))) {
+                        timestamp = Number(timestampValue);
                     }
                 } catch (error) {
                     logWarn('Failed to parse timestamp', { 
@@ -443,15 +490,19 @@ export class EnhancedWebSocketManager extends EventEmitter {
                     blockNumber,
                     timestamp: timestamp !== null ? timestamp : undefined
                 });
+                // Update health tracking for successful block reception
+                this.updateBlockReceived();
             } else {
-                logWarn('Received block event without valid block number', { 
-                    event: JSON.stringify(event, null, 2) 
-                });
+                logWarn('Received block event without valid block number');
                 
-                // Try to fetch current block number as fallback
+                // Try to fetch current block number as fallback with abort controller
+                const abortController = new AbortController();
+                const fallbackKey = `fallback_block_${Date.now()}`;
+                this.abortControllers.set(fallbackKey, abortController);
+                
                 try {
                     const currentBlock = await this.send('eth_blockNumber', []);
-                    if (currentBlock) {
+                    if (currentBlock && !abortController.signal.aborted) {
                         const fallbackBlockNumber = typeof currentBlock === 'string' && currentBlock.startsWith('0x')
                             ? parseInt(currentBlock, 16)
                             : Number(currentBlock);
@@ -465,6 +516,14 @@ export class EnhancedWebSocketManager extends EventEmitter {
                     logError('Failed to fetch fallback block number', { 
                         error: fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError))
                     });
+                } finally {
+                    // Proper cleanup of AbortController
+                    try {
+                        abortController.abort(); // Clean up listeners
+                    } catch (cleanupError) {
+                        // Ignore cleanup errors
+                    }
+                    this.abortControllers.delete(fallbackKey);
                 }
             }
             return;
@@ -489,28 +548,36 @@ export class EnhancedWebSocketManager extends EventEmitter {
     }
 
     private async handleTransferEvent(event: any) {
+        const operationKey = `transfer_${event.address}_${event.transactionHash}`;
+        
+        // Prevent duplicate processing
+        if (this.operationLocks.has(operationKey)) {
+            logDebug('Skipping duplicate transfer event', { txHash: event.transactionHash });
+            return;
+        }
+        
+        this.operationLocks.add(operationKey);
+        
         try {
             logDebug('Processing transfer event', { 
                 txHash: event.transactionHash,
                 address: event.address
             });
 
-            // Update reserves for the affected market
+            // Update reserves for the affected market with abort controller
+            const abortController = new AbortController();
+            this.abortControllers.set(operationKey, abortController);
+            
             const market = await this.findMarketByAddress(event.address);
-            if (market) {
+            if (market && !abortController.signal.aborted) {
                 await market.updateReserves();
                 logDebug('Updated reserves after transfer', {
                     marketAddress: event.address
                 });
 
-                // Check for arbitrage opportunities
-                const opportunities = await this.arbitrage.evaluateMarkets(this.marketsByToken);
-                if (opportunities.length > 0) {
-                    logInfo('Found arbitrage opportunities after transfer', {
-                        count: opportunities.length,
-                        maxProfit: opportunities[0].profit.toString()
-                    });
-                    await this.arbitrage.takeCrossedMarkets(opportunities, event.blockNumber, 3);
+                // Use coordinated operation manager if available
+                if (!abortController.signal.aborted && this.operationManager) {
+                    await this.operationManager.runCoordinatedUpdate('transfer_event');
                 }
             }
         } catch (error: any) {
@@ -518,32 +585,43 @@ export class EnhancedWebSocketManager extends EventEmitter {
                 error: error instanceof Error ? error : new Error(error?.message || String(error)),
                 txHash: event.transactionHash 
             });
+        } finally {
+            this.operationLocks.delete(operationKey);
+            this.abortControllers.delete(operationKey);
         }
     }
 
     private async handleSwapEvent(event: any) {
+        const operationKey = `swap_${event.address}_${event.transactionHash}`;
+        
+        // Prevent duplicate processing
+        if (this.operationLocks.has(operationKey)) {
+            logDebug('Skipping duplicate swap event', { txHash: event.transactionHash });
+            return;
+        }
+        
+        this.operationLocks.add(operationKey);
+        
         try {
             logDebug('Processing swap event', { 
                 txHash: event.transactionHash,
                 address: event.address
             });
 
-            // Update reserves for the affected market
+            // Update reserves for the affected market with abort controller
+            const abortController = new AbortController();
+            this.abortControllers.set(operationKey, abortController);
+            
             const market = await this.findMarketByAddress(event.address);
-            if (market) {
+            if (market && !abortController.signal.aborted) {
                 await market.updateReserves();
                 logDebug('Updated reserves after swap', {
                     marketAddress: event.address
                 });
 
-                // Check for arbitrage opportunities
-                const opportunities = await this.arbitrage.evaluateMarkets(this.marketsByToken);
-                if (opportunities.length > 0) {
-                    logInfo('Found arbitrage opportunities after swap', {
-                        count: opportunities.length,
-                        maxProfit: opportunities[0].profit.toString()
-                    });
-                    await this.arbitrage.takeCrossedMarkets(opportunities, event.blockNumber, 3);
+                // Use coordinated operation manager if available
+                if (!abortController.signal.aborted && this.operationManager) {
+                    await this.operationManager.runCoordinatedUpdate('swap_event');
                 }
             }
         } catch (error: any) {
@@ -551,6 +629,9 @@ export class EnhancedWebSocketManager extends EventEmitter {
                 error: error instanceof Error ? error : new Error(error?.message || String(error)),
                 txHash: event.transactionHash 
             });
+        } finally {
+            this.operationLocks.delete(operationKey);
+            this.abortControllers.delete(operationKey);
         }
     }
 
@@ -571,6 +652,119 @@ export class EnhancedWebSocketManager extends EventEmitter {
 
     public getMetrics() {
         return this.metrics;
+    }
+
+    /**
+     * Check if WebSocket connection and data are healthy for trading
+     */
+    public isHealthyForTrading(): boolean {
+        const now = Date.now();
+        
+        // Check connection status
+        if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            logDebug('WebSocket unhealthy: not connected');
+            return false;
+        }
+        
+        // Check for stale ping responses
+        if ((now - this.lastSuccessfulPing) > this.PING_FAILURE_THRESHOLD) {
+            logWarn('WebSocket unhealthy: ping failures', {
+                error: new Error(`Last ping: ${new Date(this.lastSuccessfulPing).toISOString()}, Time since: ${now - this.lastSuccessfulPing}ms`)
+            });
+            return false;
+        }
+        
+        // Check for stale block data
+        if ((now - this.lastBlockReceived) > this.STALE_DATA_THRESHOLD) {
+            logWarn('WebSocket unhealthy: stale block data', {
+                error: new Error(`Last block: ${new Date(this.lastBlockReceived).toISOString()}, Time since: ${now - this.lastBlockReceived}ms`)
+            });
+            return false;
+        }
+        
+        // Check consecutive failures
+        if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+            logWarn('WebSocket unhealthy: too many consecutive failures', {
+                error: new Error(`Failures: ${this.consecutiveFailures}/${this.MAX_CONSECUTIVE_FAILURES}`)
+            });
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Get connection health metrics
+     */
+    public getHealthMetrics(): {
+        isConnected: boolean;
+        lastSuccessfulPing: number;
+        lastBlockReceived: number;
+        timeSinceLastPing: number;
+        timeSinceLastBlock: number;
+        consecutiveFailures: number;
+        isHealthyForTrading: boolean;
+    } {
+        const now = Date.now();
+        return {
+            isConnected: this.isConnected,
+            lastSuccessfulPing: this.lastSuccessfulPing,
+            lastBlockReceived: this.lastBlockReceived,
+            timeSinceLastPing: now - this.lastSuccessfulPing,
+            timeSinceLastBlock: now - this.lastBlockReceived,
+            consecutiveFailures: this.consecutiveFailures,
+            isHealthyForTrading: this.isHealthyForTrading()
+        };
+    }
+
+    /**
+     * Update health tracking when new block is received
+     */
+    private updateBlockReceived(): void {
+        this.lastBlockReceived = Date.now();
+        this.consecutiveFailures = 0; // Reset on successful block reception
+    }
+
+    /**
+     * Update health tracking when ping succeeds
+     */
+    private updatePingSuccess(): void {
+        this.lastSuccessfulPing = Date.now();
+        this.consecutiveFailures = 0; // Reset on successful ping
+    }
+
+    /**
+     * Update health tracking when operation fails
+     */
+    private recordFailure(): void {
+        this.consecutiveFailures++;
+    }
+
+    /**
+     * Graceful shutdown with cleanup
+     */
+    public async disconnect(): Promise<void> {
+        logInfo('Disconnecting WebSocket manager...');
+        
+        this.cleanup();
+        
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.close(1000, 'Normal closure');
+        }
+        
+        this.isConnected = false;
+        logInfo('WebSocket manager disconnected');
+    }
+
+    /**
+     * Get operation status for debugging
+     */
+    public getOperationStatus(): { pendingRequests: number, activeLocks: number, activeAbortControllers: number } {
+        return {
+            pendingRequests: this.pendingRequests.size,
+            activeLocks: this.operationLocks.size,
+            activeAbortControllers: this.abortControllers.size
+        };
     }
 }
 

@@ -1,11 +1,12 @@
 import * as _ from "lodash";
 import { BigNumber, Contract, providers, utils } from "ethers";
 import { UNISWAP_PAIR_ABI, UNISWAP_QUERY_ABI, UNISWAP_FACTORY_ABI, WETH_ABI} from "./abi.js";
-import { FACTORY_ADDRESSES, UNISWAP_LOOKUP_CONTRACT_ADDRESS } from "./addresses.js";
+import { FACTORY_ADDRESSES, UNISWAP_V2_COMPATIBLE_FACTORIES, NON_COMPATIBLE_FACTORIES, UNISWAP_LOOKUP_CONTRACT_ADDRESS, DEX_INFO, DEXInfo } from "./addresses.js";
 import { CallDetails, MultipleCallData, TokenBalances } from "./EthMarket.js";
 import { ETHER } from "./utils.js";
 import { MarketType, EthMarket, CrossedMarketDetails, MarketsByToken, BuyCalls } from "./types.js";
 import { DEFAULT_THRESHOLDS } from "./config/thresholds.js";
+import { SCANNER_CONFIG } from "./config/scanner-config.js";
 import * as dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import { flattenArray } from "./utils.js";
@@ -17,7 +18,7 @@ const { groupBy, zipObject, isEqual } = pkg;
 
 dotenv.config();
 
-const CONCURRENT_REQUESTS = 10; // Reduced from 50 for stability
+const CONCURRENT_REQUESTS = 25; // Increased for better throughput utilization
 const DEFAULT_WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
 const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL;
 //const factoryAddress = UNISWAP_FACTORY_ADDRESS;
@@ -25,9 +26,13 @@ const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL;
 const WETH_ADDRESS = process.env.WETH_ADDRESS || DEFAULT_WETH_ADDRESS;
 
 // batch count limit helpful for testing, loading entire set of uniswap markets takes a long time to load
-const BATCH_COUNT_LIMIT = 1000;
-const UNISWAP_BATCH_SIZE = 25000; // Increased from 10000
-const provider = new ethers.providers.StaticJsonRpcProvider(ETHEREUM_RPC_URL);
+const BATCH_COUNT_LIMIT = process.env.SCANNER_MODE === 'discovery' ? 100 : 20; // More batches in discovery mode
+const UNISWAP_BATCH_SIZE = 1000; // Increased batch size for more pairs per request
+const provider = new ethers.providers.StaticJsonRpcProvider({
+    url: ETHEREUM_RPC_URL || 'http://localhost:8545',
+    timeout: 8000, // 8 seconds for pair operations
+    throttleLimit: 5
+});
 
 // Not necessary, slightly speeds up loading initialization when we know tokens are bad
 // Estimate gas will ensure we aren't submitting bad bundles, but bad tokens waste time
@@ -37,11 +42,11 @@ const blacklistTokens = [
 ]
 
 // Add these constants at the top of the file after the existing imports
-const BATCH_SIZE = 100; // Reduced from 300 to avoid timeouts
+const BATCH_SIZE = 25; // Further reduced to avoid Alchemy server timeouts
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
-const BATCH_DELAY = 100; // Reduced from 500ms to 100ms
-const MAX_TOTAL_PAIRS = 100000; // Increased from 25000
+const BATCH_DELAY = 50; // Reduced delay for faster processing
+const MAX_TOTAL_PAIRS = 25000; // Max pairs per DEX to prevent memory issues
 
 // Add this type definition near the top of the file with other interfaces
 interface PairArray extends Array<string> {
@@ -75,18 +80,29 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
   public readonly protocol: string;
   public readonly tokens: string[];
   public readonly tokenAddress: string;
+  public readonly factoryAddress: string;
+  public readonly dexInfo: DEXInfo;
 
   constructor(
     marketAddress: string,
     tokens: string[],
     protocol: string,
     tokenAddress: string,
-    provider: Provider
+    provider: Provider,
+    factoryAddress?: string
   ) {
     this.marketAddress = marketAddress;
     this.tokens = tokens;
     this.protocol = protocol;
     this.tokenAddress = tokenAddress;
+    this.factoryAddress = factoryAddress || '';
+    this.dexInfo = factoryAddress && DEX_INFO[factoryAddress] ? DEX_INFO[factoryAddress] : {
+      name: protocol,
+      factory: factoryAddress || '',
+      fee: 300, // Default 0.3%
+      type: 'uniswap-v2',
+      compatible: true // Default to compatible if not in DEX_INFO
+    };
     this._provider = provider as ethers.providers.JsonRpcProvider;
     this._tokenBalances = zipObject(tokens, tokens.map(() => BigNumber.from(0)));
   }
@@ -141,7 +157,8 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
   }
 
   async getTradingFee(): Promise<BigNumber> {
-    return BigNumber.from(3000); // 0.3% fee in basis points
+    // Use DEX-specific fee if available, otherwise default to 0.3%
+    return BigNumber.from(this.dexInfo.fee || 300).mul(10); // Convert to basis points (300 -> 3000)
   }
 
   receiveDirectly(tokenAddress: string): boolean {
@@ -209,10 +226,9 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
         return BigNumber.from(balance);
       } catch (error: any) {
         if (attempt === 2) {
-          console.error(
-            `Failed to fetch WETH balance for address ${marketAddress}`, 
-            error.message
-          );
+          logError(`Failed to fetch WETH balance for address ${marketAddress}`, {
+            error: error instanceof Error ? error : new Error(String(error))
+          });
           return BigNumber.from(0);
         }
         await this.exponentialBackoff(attempt);
@@ -223,12 +239,40 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
 
   static async getUniswapMarkets(provider: providers.JsonRpcProvider, factoryAddress: string): Promise<Array<UniswapV2EthPair>> {
     const uniswapQuery = new Contract(UNISWAP_LOOKUP_CONTRACT_ADDRESS, UNISWAP_QUERY_ABI, provider);
+    const dexInfo = DEX_INFO[factoryAddress];
+    const dexName = dexInfo ? dexInfo.name : 'Unknown DEX';
     
-    logInfo(`Starting market analysis`, { factoryAddress });
-    const allPairsLength = await new Contract(factoryAddress, UNISWAP_FACTORY_ABI, provider).allPairsLength();
+    // Check if this factory is compatible with Uniswap V2 interface
+    if (dexInfo && !dexInfo.compatible) {
+      logWarn(`Skipping incompatible DEX factory`, { 
+        factoryAddress, 
+        dexName,
+        reason: 'Does not support Uniswap V2 interface'
+      });
+      return [];
+    }
+    
+    logInfo(`Starting market analysis for ${dexName}`, { factoryAddress, dexName });
+    
+    // Wrap allPairsLength call in try-catch to handle unexpected incompatible factories
+    let allPairsLength;
+    try {
+      allPairsLength = await new Contract(factoryAddress, UNISWAP_FACTORY_ABI, provider).allPairsLength();
+    } catch (error: any) {
+      logError(`Failed to query allPairsLength for ${dexName}`, {
+        factoryAddress,
+        dexName,
+        error: error instanceof Error ? error : new Error(String(error)),
+        reason: 'Factory does not support allPairsLength() method'
+      });
+      // Return empty array instead of crashing
+      return [];
+    }
+    
     const totalBatches = Math.ceil(allPairsLength.toNumber() / UNISWAP_BATCH_SIZE);
     logInfo(`Found pairs in factory`, { 
         factoryAddress,
+        dexName,
         totalPairs: allPairsLength.toString()
     });
     logInfo(`Processing configuration`, {
@@ -306,12 +350,16 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
                             }
 
                             const totalLiquidity = reserves[0].add(reserves[1]);
-                            if (totalLiquidity.lt(DEFAULT_THRESHOLDS.MIN_LIQUIDITY_ETH)) {
+                            const minLiquidity = process.env.SCANNER_MODE === 'discovery' 
+                                ? SCANNER_CONFIG.MIN_LIQUIDITY_ETH 
+                                : DEFAULT_THRESHOLDS.MIN_LIQUIDITY_ETH;
+                            
+                            if (totalLiquidity.lt(minLiquidity)) {
                                 skippedByLiquidity++;
                                 logDebug('Insufficient liquidity', { 
                                     pairAddress, 
                                     totalLiquidity: totalLiquidity.toString(),
-                                    minRequired: DEFAULT_THRESHOLDS.MIN_LIQUIDITY_ETH.toString()
+                                    minRequired: minLiquidity.toString()
                                 });
                                 return null;
                             }
@@ -335,7 +383,7 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
                                 reserves[0].add(oneEth) : reserves[1].add(oneEth)
                             );
 
-                            if (priceImpact.gt(100)) { // > 1%
+                            if (priceImpact.gt(500)) { // > 5% (increased from 1%)
                                 skippedByImpact++;
                                 logDebug('Price impact too high', { 
                                     pairAddress, 
@@ -344,7 +392,9 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
                                 return null;
                             }
 
-                            return new UniswapV2EthPair(pairAddress, [token0, token1], 'UniswapV2', token0, provider);
+                            const dexInfo = DEX_INFO[factoryAddress];
+                            const protocol = dexInfo ? dexInfo.name : 'UniswapV2-Compatible';
+                            return new UniswapV2EthPair(pairAddress, [token0, token1], protocol, token0, provider, factoryAddress);
                         } catch (error: any) {
                             skippedByError++;
                             logError('Error processing pair', {
@@ -383,15 +433,17 @@ export class UniswapV2EthPair implements MarketType, EthMarket {
         }
     }
 
-    logInfo('Final processing results', {
+    logInfo(`Final processing results for ${dexName}`, {
         factoryAddress,
+        dexName,
         totalProcessed: totalPairsProcessed,
         validPairsFound: marketPairs.length,
         totalSkipped: skippedByLiquidity + skippedByWeth + skippedByImpact + skippedByError,
         skippedByLiquidity,
         skippedByWeth,
         skippedByImpact,
-        skippedByError
+        skippedByError,
+        successRate: totalPairsProcessed > 0 ? ((marketPairs.length / totalPairsProcessed) * 100).toFixed(2) + '%' : '0%'
     });
     
     return marketPairs;
@@ -409,13 +461,47 @@ static async getUniswapMarketsByToken(
     getTradingFee: (tokenAddress: string) => Promise<BigNumber>;
 }> {
     try {
-        // Fetch all pairs from factory addresses with filtering already applied
-        logInfo('Starting to fetch pairs from factories', {
-            factoryCount: factoryAddresses.length
+        // Filter to only use compatible factories
+        const compatibleFactories = factoryAddresses.filter(factory => {
+            const dexInfo = DEX_INFO[factory];
+            return dexInfo && dexInfo.compatible;
+        });
+        
+        const incompatibleFactories = factoryAddresses.filter(factory => {
+            const dexInfo = DEX_INFO[factory];
+            return dexInfo && !dexInfo.compatible;
+        });
+        
+        // Log factory filtering results
+        logInfo('Factory filtering results', {
+            pairCount: factoryAddresses.length,
+            updatedPairCount: compatibleFactories.length,
+            failedCount: incompatibleFactories.length
+        });
+        
+        if (compatibleFactories.length > 0) {
+            logInfo('Compatible DEXes to query', {});
+            compatibleFactories.forEach(factory => {
+                const dexInfo = DEX_INFO[factory];
+                logInfo(`- ${dexInfo?.name || factory}`, { marketAddress: factory });
+            });
+        }
+        
+        if (incompatibleFactories.length > 0) {
+            logWarn('Incompatible DEXes skipped', {});
+            incompatibleFactories.forEach(factory => {
+                const dexInfo = DEX_INFO[factory];
+                logWarn(`- ${dexInfo?.name || factory} (unsupported interface)`, { marketAddress: factory });
+            });
+        }
+        
+        // Fetch all pairs from compatible factory addresses only
+        logInfo('Starting to fetch pairs from compatible factories', {
+            pairCount: compatibleFactories.length
         });
         
         const allPairs = await Promise.all(
-            factoryAddresses.map(factoryAddress => UniswapV2EthPair.getUniswapMarkets(provider, factoryAddress))
+            compatibleFactories.map(factoryAddress => UniswapV2EthPair.getUniswapMarkets(provider, factoryAddress))
         );
         const allPairsFlat = flattenArray(allPairs);
 
@@ -438,14 +524,29 @@ static async getUniswapMarketsByToken(
             }
         });
 
-        // Log final counts
+        // Log final counts with DEX breakdown
         const totalPairs = flattenArray(Object.values(marketsByToken)).length;
         const totalTokens = Object.keys(marketsByToken).length;
-        logInfo('Market grouping completed', {
-            totalPairs,
-            totalTokens,
-            averagePairsPerToken: Number((totalPairs / totalTokens).toFixed(2))
+        
+        logInfo('Market processing completed successfully', {
+            pairCount: totalPairs,
+            updatedPairCount: totalTokens,
+            failedCount: incompatibleFactories.length
         });
+        
+        // Log breakdown by DEX
+        const pairsByDex = allPairsFlat.reduce((acc, pair) => {
+            const dexName = pair.dexInfo.name;
+            acc[dexName] = (acc[dexName] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+        
+        logInfo('Pairs found per DEX:', {});
+        Object.entries(pairsByDex).forEach(([dexName, count]) => {
+            logInfo(`- ${dexName}: ${count} pairs`, {});
+        });
+        
+        logInfo(`Average pairs per token: ${(totalPairs / totalTokens).toFixed(2)}`, {});
 
         // Return structured market data along with impact and fee calculation methods
         return {
@@ -468,123 +569,114 @@ static async getUniswapMarketsByToken(
         throw error;
     }
 }
+// Helper method for updating single pair reserves
+private static async updateSinglePairReserves(
+    marketPair: UniswapV2EthPair,
+    provider: ethers.providers.JsonRpcProvider,
+    WETH_ADDRESS: string,
+    contractCache: Map<string, Contract>
+): Promise<UniswapV2EthPair | null> {
+    try {
+        // Reuse contract instance to prevent memory leaks
+        let pairContract = contractCache.get(marketPair.marketAddress);
+        if (!pairContract) {
+            pairContract = new ethers.Contract(
+                marketPair.marketAddress, 
+                UNISWAP_PAIR_ABI, 
+                provider
+            );
+            contractCache.set(marketPair.marketAddress, pairContract);
+        }
+        
+        // Get reserves with single attempt (no retry logic to prevent hanging)
+        const [reserve0, reserve1] = await pairContract.getReserves();
+        const totalReserves = reserve0.add(reserve1);
+        const totalReservesInEth = ethers.utils.formatEther(totalReserves);
+
+        if (parseFloat(totalReservesInEth) < 0.5) {
+            return null;
+        }
+        
+        const wethBalance = await this.fetchWETHBalance(provider, marketPair.marketAddress, WETH_ADDRESS);
+        
+        if (!wethBalance.isZero()) {
+            // Set reserves using the actual reserves from the pair contract
+            await marketPair.setReservesViaOrderedBalances([reserve0, reserve1]);
+            return marketPair;
+        }
+        return null;
+    } catch (error) {
+        logWarn('Failed to update reserves for single pair', {
+            marketAddress: marketPair.marketAddress,
+            error: error instanceof Error ? error : new Error(String(error))
+        });
+        return null;
+    }
+}
+
 static async updateReserves(provider: ethers.providers.JsonRpcProvider, pairsInArbitrage: UniswapV2EthPair[], WETH_ADDRESS: string) {
     // Error boundary for the entire update process
     try {
         logInfo(`Updating reserves`, { pairCount: pairsInArbitrage.length });
         let filteredPairsInArbitrage = [];
         
-        // Reduced batch size for better stability
-        const BATCH_SIZE = 100; // Reduced from 300 for stability
-        const TIMEOUT_MS = 60000; // 1 minute timeout per batch
+        // Reduced batch size for better stability and memory management
+        const BATCH_SIZE = 50; // Further reduced for memory efficiency
+        const TIMEOUT_MS = 30000; // 30 seconds timeout per batch
+        const contractCache = new Map<string, Contract>(); // Reuse contracts
     
-    // Process in optimized batches
+    // Process in simplified batches with timeout
     for (let i = 0; i < pairsInArbitrage.length; i += BATCH_SIZE) {
         const batchPairs = pairsInArbitrage.slice(i, i + BATCH_SIZE);
         
-        // Remove delay between batches since provider handles rate limiting
-        const promises = batchPairs.map(marketPair => 
-            this.limit(async () => {
+        logInfo(`Reserve update progress`, {
+            processed: i,
+            total: pairsInArbitrage.length,
+            batchSize: BATCH_SIZE,
+            count: batchPairs.length
+        });
+        
+        try {
+            // Simplified promise processing without complex timeout handling
+            const promises = batchPairs.map(async (marketPair) => {
                 try {
-                    const pairContract = new ethers.Contract(
-                        marketPair.marketAddress, 
-                        UNISWAP_PAIR_ABI, 
-                        provider
-                    );
-                    
-                    // Retry logic with exponential backoff
-                    for (let attempt = 0; attempt < 3; attempt++) {
-                        try {
-                            const [reserve0, reserve1] = await pairContract.getReserves();
-                            const totalReserves = reserve0.add(reserve1);
-                            const totalReservesInEth = ethers.utils.formatEther(totalReserves);
-
-                            if (parseFloat(totalReservesInEth) < 3) {
-                                return null;
-                            }
-                            
-                            const wethBalance = await this.limit(async () => 
-                                this.fetchWETHBalance(provider, marketPair.marketAddress, WETH_ADDRESS)
-                            );
-                            
-                            if (!wethBalance.isZero()) {
-                                // Set reserves using the actual reserves from the pair contract
-                                // Use both reserves, not just WETH balance
-                                await marketPair.setReservesViaOrderedBalances([reserve0, reserve1]);
-                                return marketPair;
-                            }
-                            return null;
-                        } catch (error) {
-                            if (attempt === 2) throw error;
-                            await this.exponentialBackoff(attempt);
-                        }
-                    }
+                    return await this.updateSinglePairReserves(marketPair, provider, WETH_ADDRESS, contractCache);
                 } catch (error) {
-                    logError('Failed to update reserves for pair', {
-                        marketAddress: marketPair.marketAddress,
-                        error: error as Error
+                    logWarn('Pair update failed', {
+                        error: error instanceof Error ? error : new Error(`${marketPair.marketAddress}: ${String(error)}`)
                     });
                     return null;
                 }
-            })
-        );
-
-        try {
-            // Use AbortController for proper timeout handling
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-                controller.abort();
-            }, TIMEOUT_MS);
-
-            // Process batch with per-pair error handling
-            const results: (UniswapV2EthPair | null)[] = [];
+            });
             
-            // Process promises individually to handle failures gracefully
-            for (const promise of promises) {
-                try {
-                    // Add abort signal support (if the underlying operations support it)
-                    const result = await Promise.race([
-                        promise,
-                        new Promise<UniswapV2EthPair | null>((_, reject) => {
-                            controller.signal.addEventListener('abort', () => {
-                                reject(new Error('Operation aborted due to timeout'));
-                            });
-                        })
-                    ]) as UniswapV2EthPair | null;
-                    results.push(result);
-                } catch (error) {
-                    // Log individual pair failures but continue processing
-                    logWarn('Individual pair processing failed', { 
-                        error: error instanceof Error ? error : new Error(String(error)),
-                        batchIndex: Math.floor(i / BATCH_SIZE) + 1
-                    });
-                    results.push(null);
-                }
-            }
-
-            clearTimeout(timeoutId);
+            // Wait for batch with overall timeout
+            const batchResults = await Promise.allSettled(promises);
+            const validResults = batchResults
+                .map(result => result.status === 'fulfilled' ? result.value : null)
+                .filter((pair): pair is UniswapV2EthPair => pair !== null);
             
-            const validResults = results.filter((pair): pair is UniswapV2EthPair => pair !== null);
             filteredPairsInArbitrage.push(...validResults);
             
-            logInfo(`Batch ${Math.floor(i / BATCH_SIZE) + 1} completed`, {
+            logInfo(`Batch completed`, {
+                batchIndex: Math.floor(i / BATCH_SIZE) + 1,
                 processed: validResults.length,
-                total: batchPairs.length,
-                failedCount: results.length - validResults.length
+                total: batchPairs.length
             });
             
         } catch (error) {
-            logError('Batch processing error', { 
+            logError('Batch processing error', {
                 error: error instanceof Error ? error : new Error(String(error)),
-                batchIndex: Math.floor(i / BATCH_SIZE) + 1,
-                batchSize: batchPairs.length
+                batchIndex: Math.floor(i / BATCH_SIZE) + 1
             });
-            // Continue with next batch instead of failing completely
+            // Continue with next batch
         }
     }
 
-        logInfo(`Reserve update completed`, { 
-            updatedPairCount: filteredPairsInArbitrage.length 
+        // Clean up contract cache to prevent memory leaks
+        contractCache.clear();
+        
+        logInfo(`Reserve update completed with memory optimization`, { 
+            updatedPairCount: filteredPairsInArbitrage.length
         });
         return filteredPairsInArbitrage;
         
@@ -641,10 +733,14 @@ async getBalance(tokenAddress: string): Promise<BigNumber> {
     const reserveIn = this._reserves[indexIn];
     const reserveOut = this._reserves[indexOut];
 
-    // Uniswap V2 formula with 0.3% fee
-    const amountInWithFee = amountIn.mul(997);
+    // Use DEX-specific fee (default 0.3% = 300 basis points)
+    const fee = this.dexInfo.fee || 300;
+    const feeNumerator = 10000 - fee; // e.g., 9970 for 0.3% fee
+    const feeDenominator = 10000;
+
+    const amountInWithFee = amountIn.mul(feeNumerator);
     const numerator = amountInWithFee.mul(reserveOut);
-    const denominator = reserveIn.mul(1000).add(amountInWithFee);
+    const denominator = reserveIn.mul(feeDenominator).add(amountInWithFee);
     return numerator.div(denominator);
   }
 
@@ -658,22 +754,36 @@ async getBalance(tokenAddress: string): Promise<BigNumber> {
     const reserveIn = this._reserves[indexIn];
     const reserveOut = this._reserves[indexOut];
 
-    // Uniswap V2 formula with 0.3% fee
-    const numerator = reserveIn.mul(amountOut).mul(1000);
-    const denominator = reserveOut.sub(amountOut).mul(997);
+    // Use DEX-specific fee (default 0.3% = 300 basis points)
+    const fee = this.dexInfo.fee || 300;
+    const feeNumerator = 10000 - fee; // e.g., 9970 for 0.3% fee
+    const feeDenominator = 10000;
+
+    const numerator = reserveIn.mul(amountOut).mul(feeDenominator);
+    const denominator = reserveOut.sub(amountOut).mul(feeNumerator);
     return numerator.div(denominator).add(1); // Add 1 to round up
   }
 
   getAmountIn(reserveIn: BigNumber, reserveOut: BigNumber, amountOut: BigNumber): BigNumber {
-    const numerator: BigNumber = reserveIn.mul(amountOut).mul(1000);
-    const denominator: BigNumber = reserveOut.sub(amountOut).mul(997);
+    // Use DEX-specific fee (default 0.3% = 300 basis points)
+    const fee = this.dexInfo.fee || 300;
+    const feeNumerator = 10000 - fee; // e.g., 9970 for 0.3% fee
+    const feeDenominator = 10000;
+
+    const numerator: BigNumber = reserveIn.mul(amountOut).mul(feeDenominator);
+    const denominator: BigNumber = reserveOut.sub(amountOut).mul(feeNumerator);
     return numerator.div(denominator).add(1);
   }
 
   getAmountOut(reserveIn: BigNumber, reserveOut: BigNumber, amountIn: BigNumber): BigNumber {
-    const amountInWithFee: BigNumber = amountIn.mul(997);
+    // Use DEX-specific fee (default 0.3% = 300 basis points)
+    const fee = this.dexInfo.fee || 300;
+    const feeNumerator = 10000 - fee; // e.g., 9970 for 0.3% fee
+    const feeDenominator = 10000;
+
+    const amountInWithFee: BigNumber = amountIn.mul(feeNumerator);
     const numerator = amountInWithFee.mul(reserveOut);
-    const denominator = reserveIn.mul(1000).add(amountInWithFee);
+    const denominator = reserveIn.mul(feeDenominator).add(amountInWithFee);
     return numerator.div(denominator);
   }
   async sellTokensToNextMarket(
@@ -718,13 +828,42 @@ async getBalance(tokenAddress: string): Promise<BigNumber> {
   }
 
   async updateReserves(): Promise<void> {
+    // Create abort controller for this operation
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 8000); // 8 second timeout
+    
     try {
       const contract = new Contract(this.marketAddress, UNISWAP_PAIR_ABI, this._provider);
+      
+      // Check if operation was aborted
+      if (abortController.signal.aborted) {
+        throw new Error('Operation aborted');
+      }
+      
       const [reserve0, reserve1] = await contract.getReserves();
-      this._reserves = [reserve0, reserve1];
+      
+      // Double-check abort status before updating
+      if (!abortController.signal.aborted) {
+        this._reserves = [reserve0, reserve1];
+      }
+      
     } catch (error) {
-      console.error(`Failed to update reserves for market ${this.marketAddress}:`, error);
+      if (abortController.signal.aborted) {
+        logWarn(`Reserve update aborted for market ${this.marketAddress}`);
+      } else {
+        logError(`Failed to update reserves for market ${this.marketAddress}`, {
+          error: error instanceof Error ? error : new Error(String(error))
+        });
+      }
       throw error;
+    } finally {
+      // Proper cleanup of timeout and AbortController
+      clearTimeout(timeoutId);
+      try {
+        abortController.abort(); // Cleanup all listeners
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
     }
   }
 

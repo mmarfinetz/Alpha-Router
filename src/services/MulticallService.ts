@@ -52,17 +52,26 @@ export class MulticallService {
 
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
     const controller = new AbortController();
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     const timeoutPromise = new Promise<never>((_, reject) => {
-      const timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(() => {
         controller.abort();
         reject(new Error(`Operation timed out after ${timeoutMs}ms`));
       }, timeoutMs);
-      
-      // Clean up timeout if the promise resolves/rejects first
-      promise.finally(() => clearTimeout(timeoutId));
     });
 
-    return Promise.race([promise, timeoutPromise]);
+    try {
+      const result = await Promise.race([promise, timeoutPromise]);
+      return result;
+    } finally {
+      // Cleanup: clear timeout and abort controller
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      // AbortController cleanup - remove all listeners
+      controller.abort(); // This will clean up internal listeners
+    }
   }
 
   private async delay(ms: number): Promise<void> {
