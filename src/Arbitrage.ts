@@ -4,23 +4,23 @@ import { Contract } from '@ethersproject/contracts';
 import { Wallet } from '@ethersproject/wallet';
 import { providers, ethers } from "ethers";
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
-import { WETH_ADDRESS } from "./addresses.js";
-import { EthMarket } from "./EthMarket.js";
-import type { MarketType } from "./EthMarket.js";
-import { ETHER, bigNumberToDecimal } from "./utils.js";
-import { MarketsByToken, CrossedMarketDetails, BuyCalls } from './types.js';
+import { WETH_ADDRESS } from "./addresses";
+import { EthMarket } from "./EthMarket";
+import type { MarketType } from "./EthMarket";
+import { ETHER, bigNumberToDecimal } from "./utils";
+import { MarketsByToken, CrossedMarketDetails, BuyCalls } from './types';
 import { Provider } from "@ethersproject/providers";
 import { TransactionResponse } from "@ethersproject/providers";
-import { MarketThresholds, DEFAULT_THRESHOLDS } from './config/thresholds.js';
-import { EnhancedWebSocketManager } from "./websocketmanager.js";
-import { AnalyticalArbitrageEngine, AnalyticalEngineConfig } from './engines/AnalyticalArbitrageEngine.js';
-import { CrossDEXScanner, ScannerConfig } from './scanners/CrossDEXScanner.js';
-import { logInfo, logError, logDebug, logWarn } from './utils/logger.js';
-import { CircuitBreaker } from './utils/CircuitBreaker.js';
-import { GasPriceManager } from './utils/GasPriceManager.js';
-import { AGGRESSIVE_MARKET_FILTERS } from './config/marketFilters.js';
+import { MarketThresholds, DEFAULT_THRESHOLDS } from './config/thresholds';
+import { EnhancedWebSocketManager } from "./websocketmanager";
+import { AnalyticalArbitrageEngine, AnalyticalEngineConfig } from './engines/AnalyticalArbitrageEngine';
+import { CrossDEXScanner, ScannerConfig } from './scanners/CrossDEXScanner';
+import { logInfo, logError, logDebug, logWarn } from './utils/logger';
+import { CircuitBreaker } from './utils/CircuitBreaker';
+import { GasPriceManager } from './utils/GasPriceManager';
+import { AGGRESSIVE_MARKET_FILTERS } from './config/marketFilters';
 
-export { MarketsByToken, CrossedMarketDetails } from './types.js';
+export { MarketsByToken, CrossedMarketDetails } from './types';
 
 export interface BundleEntry {
     to: string,

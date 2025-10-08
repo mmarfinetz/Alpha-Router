@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "devCommand": "npm start",
+  "installCommand": "npm install",
+  "framework": "create-react-app",
+  "env": {
+    "REACT_APP_SOLVER_WS_URL": "https://cow-solver-production.up.railway.app"
+  }
+}

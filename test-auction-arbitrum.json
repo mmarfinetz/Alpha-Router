@@ -1,0 +1,58 @@
+{
+  "id": "test-auction-arbitrum-local",
+  "orders": [
+    {
+      "uid": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef68dc9316",
+      "sellToken": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+      "buyToken": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
+      "sellAmount": "1000000000000000000",
+      "buyAmount": "2500000000",
+      "kind": "sell",
+      "partiallyFillable": false,
+      "validTo": 1735689600,
+      "appData": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "feeAmount": "10000000000000000",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "owner": "0xf56bEDf2ddF83B7C76A8a24865a9f0F1279Fb1a7",
+      "sellTokenBalance": "erc20",
+      "buyTokenBalance": "erc20"
+    }
+  ],
+  "liquidity": [
+    {
+      "kind": "ConstantProduct",
+      "tokens": [
+        "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+        "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"
+      ],
+      "reserves": [
+        "100000000000000000000",
+        "300000000000"
+      ],
+      "router": "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506",
+      "gasEstimate": "110000",
+      "address": "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506"
+    },
+    {
+      "kind": "WeightedProduct",
+      "tokens": [
+        "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+        "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"
+      ],
+      "reserves": [
+        "50000000000000000000",
+        "150000000000"
+      ],
+      "weights": [
+        "500000000000000000",
+        "500000000000000000"
+      ],
+      "router": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "gasEstimate": "180000",
+      "address": "0xBA12222222228d8Ba445958a75a0704d566BF2C8"
+    }
+  ],
+  "effectiveGasPrice": "100000000",
+  "deadline": "2025-12-31T23:59:59.000Z",
+  "surplus_capturing_jit_order_owners": []
+}

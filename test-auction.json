@@ -1,0 +1,53 @@
+{
+  "id": "test-auction-profitable",
+  "orders": [
+    {
+      "uid": "0xtest123456789abcdef",
+      "sellToken": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "buyToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "sellAmount": "1000000000000000000",
+      "buyAmount": "2500000000",
+      "kind": "sell",
+      "partiallyFillable": false,
+      "validTo": 9999999999,
+      "appData": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "feeAmount": "0",
+      "owner": "0x0000000000000000000000000000000000000001",
+      "sellTokenBalance": "erc20",
+      "buyTokenBalance": "erc20"
+    }
+  ],
+  "liquidity": [
+    {
+      "kind": "ConstantProduct",
+      "tokens": [
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      ],
+      "reserves": [
+        "100000000000000000000",
+        "300000000000000"
+      ],
+      "router": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+      "gasEstimate": "150000",
+      "address": "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"
+    },
+    {
+      "kind": "UniswapV2",
+      "tokens": [
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      ],
+      "reserves": [
+        "95000000000000000000",
+        "310000000000000"
+      ],
+      "router": "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F",
+      "gasEstimate": "160000",
+      "address": "0x397FF1542f962076d0BFE58eA045FfA2d347ACa0"
+    }
+  ],
+  "effectiveGasPrice": "30000000000",
+  "deadline": "2025-12-31T23:59:59Z",
+  "surplus_capturing_jit_order_owners": []
+}

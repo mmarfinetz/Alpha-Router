@@ -1,8 +1,8 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { Contract } from "@ethersproject/contracts";
 import { Provider } from "@ethersproject/providers";
-import { EthMarket, MarketType, BuyCalls } from "../EthMarket.js";
-import { logInfo, logError, logDebug, logWarn } from "../utils/logger.js";
+import { EthMarket, MarketType, BuyCalls } from "../EthMarket";
+import { logInfo, logError, logDebug, logWarn } from "../utils/logger";
 
 // Kyber DMM Pool ABI - Dynamic Market Maker interface
 const KYBER_DMM_POOL_ABI = [
@@ -423,8 +423,31 @@ export class KyberDMMPool extends EthMarket implements MarketType {
         
         const ratio0 = this.poolInfo.vReserve0.mul(10000).div(this.poolInfo.reserve0);
         const ratio1 = this.poolInfo.vReserve1.mul(10000).div(this.poolInfo.reserve1);
-        
+
         // Return average ratio
         return ratio0.add(ratio1).div(2);
+    }
+
+    /**
+     * Manually set reserves from CoW auction data (bypasses chain fetching)
+     * For Kyber DMM, we set virtual reserves equal to actual reserves (conservative approach)
+     */
+    async setReservesViaOrderedBalances(balances: BigNumber[]): Promise<void> {
+        if (!balances || balances.length !== 2) {
+            throw new Error("KyberDMM requires exactly 2 balances");
+        }
+
+        this._reserves = [...balances];
+
+        // Update poolInfo if it exists, otherwise create minimal poolInfo
+        if (this.poolInfo) {
+            this.poolInfo.reserve0 = balances[0];
+            this.poolInfo.reserve1 = balances[1];
+            // Set virtual reserves equal to actual reserves (neutral amplification)
+            this.poolInfo.vReserve0 = balances[0];
+            this.poolInfo.vReserve1 = balances[1];
+        }
+
+        logDebug(`Set Kyber DMM pool reserves: ${balances.map(b => b.toString()).join(', ')}`);
     }
 }

@@ -1,7 +1,7 @@
 import { BigNumber, Contract } from 'ethers';
-import { UNISWAP_PAIR_ABI } from '../abi.js';
-import { ProviderManager } from './ProviderManager.js';
-import { logInfo, logError, logDebug } from '../utils/logger.js';
+import { UNISWAP_PAIR_ABI } from '../abi';
+import { ProviderManager } from './ProviderManager';
+import { logInfo, logError, logDebug } from '../utils/logger';
 
 export interface BatchedReserveRequest {
     pairAddress: string;

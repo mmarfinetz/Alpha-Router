@@ -1,0 +1,54 @@
+{
+  "id": "test-arbitrum-real-pools",
+  "orders": [
+    {
+      "uid": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef68dc9316",
+      "sellToken": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+      "buyToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      "sellAmount": "1000000000000000000",
+      "buyAmount": "3000000000",
+      "kind": "sell",
+      "partiallyFillable": false,
+      "validTo": 1735689600,
+      "appData": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "feeAmount": "5000000000000000",
+      "receiver": "0x0000000000000000000000000000000000000000",
+      "owner": "0xf56bEDf2ddF83B7C76A8a24865a9f0F1279Fb1a7",
+      "sellTokenBalance": "erc20",
+      "buyTokenBalance": "erc20"
+    }
+  ],
+  "liquidity": [
+    {
+      "kind": "ConstantProduct",
+      "tokens": [
+        "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+        "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+      ],
+      "reserves": [
+        "50000000000000000000",
+        "150000000000"
+      ],
+      "router": "0xc873fEcbd354f5A56E00E710B90EF4201db2448d",
+      "gasEstimate": "110000",
+      "address": "0xc873fEcbd354f5A56E00E710B90EF4201db2448d"
+    },
+    {
+      "kind": "ConstantProduct",
+      "tokens": [
+        "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+        "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+      ],
+      "reserves": [
+        "30000000000000000000",
+        "90000000000"
+      ],
+      "router": "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506",
+      "gasEstimate": "110000",
+      "address": "0xd9e2a1a61B6E61b275cEc326465d417e52C1b95c"
+    }
+  ],
+  "effectiveGasPrice": "100000000",
+  "deadline": "2025-12-31T23:59:59.000Z",
+  "surplus_capturing_jit_order_owners": []
+}

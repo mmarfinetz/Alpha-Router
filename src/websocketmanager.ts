@@ -1,12 +1,12 @@
 import { WebSocket } from 'ws';
 import { BigNumber } from '@ethersproject/bignumber';
-import { Arbitrage } from './Arbitrage.js';
-import { UniswapV2EthPair } from './UniswapV2EthPair.js';
+import { Arbitrage } from './Arbitrage';
+import { UniswapV2EthPair } from './UniswapV2EthPair';
 import * as dotenv from "dotenv";
 import axios from 'axios';
-import { MarketsByToken } from './types.js';
-import { Config } from './config/config.js';
-import { logInfo, logError, logDebug, logWarn } from './utils/logger.js';
+import { MarketsByToken } from './types';
+import { Config } from './config/config';
+import { logInfo, logError, logDebug, logWarn } from './utils/logger';
 import { EventEmitter } from 'events';
 dotenv.config();
 

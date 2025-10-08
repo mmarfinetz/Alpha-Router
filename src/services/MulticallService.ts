@@ -1,5 +1,5 @@
 import { Contract, providers, utils, BigNumber } from 'ethers';
-import logger from '../utils/logger.js';
+import logger from '../utils/logger';
 
 // Multicall2 ABI - only the methods we need
 const MULTICALL2_ABI = [

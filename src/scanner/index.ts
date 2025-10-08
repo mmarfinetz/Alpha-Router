@@ -10,10 +10,10 @@
 
 import { Command } from 'commander';
 import { config } from 'dotenv';
-import { BasicMarketScanner } from './basic-scanner.js';
-// import { AdvancedMarketScanner } from './advanced-scanner.js';
-// import { MarketScanner } from './market-scanner.js';
-import { logInfo as info, logError as error } from '../utils/logger.js';
+import { BasicMarketScanner } from './basic-scanner';
+// import { AdvancedMarketScanner } from './advanced-scanner';
+// import { MarketScanner } from './market-scanner';
+import { logInfo as info, logError as error } from '../utils/logger';
 
 // Load environment variables
 config();

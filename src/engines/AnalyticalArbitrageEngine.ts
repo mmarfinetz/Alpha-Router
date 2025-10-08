@@ -1,9 +1,9 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { formatUnits, parseUnits, formatEther } from "@ethersproject/units";
-import logger from '../utils/logger.js';
-import { MarketsByToken, CrossedMarketDetails } from '../types.js';
-import { EthMarket } from '../EthMarket.js';
-import { MARKET_FILTERS, MarketFilterValidator } from '../config/marketFilters.js';
+import logger from '../utils/logger';
+import { MarketsByToken, CrossedMarketDetails } from '../types';
+import { EthMarket } from '../EthMarket';
+import { MARKET_FILTERS, MarketFilterValidator } from '../config/marketFilters';
 
 export interface ArbitrageOpportunity {
     buyMarket: EthMarket;

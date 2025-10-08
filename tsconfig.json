@@ -24,10 +24,7 @@
     "types": ["node", "mocha", "chai"]
   },
   "include": [
-    "./src/**/*",
-    "./test/**/*",
-    "./scripts/**/*",
-    "./hardhat.config.ts"
+    "./src/**/*"
   ],
   "exclude": [
     "node_modules",
@@ -37,7 +34,9 @@
     "src/scanner/advanced-scanner.ts",
     "src/scanner/market-scanner.ts",
     "test/**/*",
-    "scripts/deploy.ts"
+    "scripts/**/*",
+    "hardhat.config.ts",
+    "hardhat.config.cjs"
   ],
   "ts-node": {
     "esm": false,

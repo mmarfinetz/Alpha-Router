@@ -1,10 +1,10 @@
 import { providers, Wallet, ethers, BigNumber } from 'ethers';
-import { UniswapV2EthPair } from '../UniswapV2EthPair.js';
-import { FACTORY_ADDRESSES, WETH_ADDRESS } from '../addresses.js';
-import { DEFAULT_THRESHOLDS } from '../config/thresholds.js';
-import { MarketsByToken } from '../types.js';
+import { UniswapV2EthPair } from '../UniswapV2EthPair';
+import { FACTORY_ADDRESSES, WETH_ADDRESS } from '../addresses';
+import { DEFAULT_THRESHOLDS } from '../config/thresholds';
+import { MarketsByToken } from '../types';
 import * as dotenv from 'dotenv';
-import { logInfo, logError, logDebug } from '../utils/logger.js';
+import { logInfo, logError, logDebug } from '../utils/logger';
 import { formatEther, formatUnits } from 'ethers/lib/utils.js';
 
 dotenv.config();

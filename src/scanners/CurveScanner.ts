@@ -1,11 +1,11 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { Provider } from "@ethersproject/providers";
 import { Contract } from "@ethersproject/contracts";
-import { ProtocolScanner, PoolInfo, ScannerConfig } from "./ProtocolScanner.js";
-import { CurvePool } from "../markets/CurvePool.js";
-import { MarketType } from "../EthMarket.js";
-import { PROTOCOL_REGISTRIES } from "../addresses.js";
-import { logInfo, logError, logDebug, logWarn } from "../utils/logger.js";
+import { ProtocolScanner, PoolInfo, ScannerConfig } from "./ProtocolScanner";
+import { CurvePool } from "../markets/CurvePool";
+import { MarketType } from "../EthMarket";
+import { PROTOCOL_REGISTRIES } from "../addresses";
+import { logInfo, logError, logDebug, logWarn } from "../utils/logger";
 
 const CURVE_REGISTRY_ABI = [
     "function pool_count() view returns (uint256)",

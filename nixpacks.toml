@@ -1,0 +1,8 @@
+[phases.install]
+cmds = ["npm ci --legacy-peer-deps"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "NODE_ENV=production node build/cow/index.js"

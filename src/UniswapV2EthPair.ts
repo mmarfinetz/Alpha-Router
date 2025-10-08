@@ -1,19 +1,19 @@
 import * as _ from "lodash";
 import { BigNumber, Contract, providers, utils } from "ethers";
-import { UNISWAP_PAIR_ABI, UNISWAP_QUERY_ABI, UNISWAP_FACTORY_ABI, WETH_ABI} from "./abi.js";
-import { FACTORY_ADDRESSES, UNISWAP_V2_COMPATIBLE_FACTORIES, NON_COMPATIBLE_FACTORIES, UNISWAP_LOOKUP_CONTRACT_ADDRESS, DEX_INFO, DEXInfo } from "./addresses.js";
-import { CallDetails, MultipleCallData, TokenBalances } from "./EthMarket.js";
-import { ETHER } from "./utils.js";
-import { MarketType, EthMarket, CrossedMarketDetails, MarketsByToken, BuyCalls } from "./types.js";
-import { DEFAULT_THRESHOLDS } from "./config/thresholds.js";
-import { SCANNER_CONFIG } from "./config/scanner-config.js";
+import { UNISWAP_PAIR_ABI, UNISWAP_QUERY_ABI, UNISWAP_FACTORY_ABI, WETH_ABI} from "./abi";
+import { FACTORY_ADDRESSES, UNISWAP_V2_COMPATIBLE_FACTORIES, NON_COMPATIBLE_FACTORIES, UNISWAP_LOOKUP_CONTRACT_ADDRESS, DEX_INFO, DEXInfo } from "./addresses";
+import { CallDetails, MultipleCallData, TokenBalances } from "./EthMarket";
+import { ETHER } from "./utils";
+import { MarketType, EthMarket, CrossedMarketDetails, MarketsByToken, BuyCalls } from "./types";
+import { DEFAULT_THRESHOLDS } from "./config/thresholds";
+import { SCANNER_CONFIG } from "./config/scanner-config";
 import * as dotenv from 'dotenv';
 import { ethers } from 'ethers';
-import { flattenArray } from "./utils.js";
+import { flattenArray } from "./utils";
 // import pLimit from 'p-limit'; // Temporarily disabled due to ES module conflict
 import { Provider } from '@ethersproject/providers';
 import pkg from 'lodash';
-import { logInfo, logError, logDebug, logWarn } from './utils/logger.js';
+import { logInfo, logError, logDebug, logWarn } from './utils/logger';
 const { groupBy, zipObject, isEqual } = pkg;
 
 dotenv.config();

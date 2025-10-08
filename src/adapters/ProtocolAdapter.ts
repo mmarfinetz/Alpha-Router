@@ -1,12 +1,12 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { Contract } from "@ethersproject/contracts";
 import { Provider } from "@ethersproject/providers";
-import { EthMarket, MarketType, BuyCalls } from "../EthMarket.js";
-import { CurvePool } from "../markets/CurvePool.js";
-import { BalancerV2Pool } from "../markets/BalancerV2Pool.js";
-import { DODOV2Pool } from "../markets/DODOV2Pool.js";
-import { KyberDMMPool } from "../markets/KyberDMMPool.js";
-import { logInfo, logError, logDebug } from "../utils/logger.js";
+import { EthMarket, MarketType, BuyCalls } from "../EthMarket";
+import { CurvePool } from "../markets/CurvePool";
+import { BalancerV2Pool } from "../markets/BalancerV2Pool";
+import { DODOV2Pool } from "../markets/DODOV2Pool";
+import { KyberDMMPool } from "../markets/KyberDMMPool";
+import { logInfo, logError, logDebug } from "../utils/logger";
 
 export interface SwapParams {
     protocol: string;

@@ -1,0 +1,131 @@
+════════════════════════════════════════════════════════════════
+🚀 DEPLOYMENT COMMANDS - COPY & PASTE
+════════════════════════════════════════════════════════════════
+
+✅ YOUR HEALTHCHECK IS ALREADY BUILT!
+
+Located at: GET /health
+Returns: { status: "alive", auctionsProcessed: 0, ... }
+
+You don't need to do anything for healthcheck - it's ready! ✅
+
+════════════════════════════════════════════════════════════════
+📋 WHAT YOU NEED TO START:
+════════════════════════════════════════════════════════════════
+
+1. Alchemy RPC URL (get FREE at alchemy.com)
+2. MetaMask Private Key (wallet doesn't need funds!)
+
+That's it! 🎉
+
+════════════════════════════════════════════════════════════════
+🚀 DEPLOYMENT STEPS - COPY THESE COMMANDS:
+════════════════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1: Configure (2 minutes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+nano .env.competition
+
+# Add your actual values:
+# ETHEREUM_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR-KEY
+# PRIVATE_KEY=0xyour_private_key_here
+
+# Save: Ctrl+X, Y, Enter
+
+# Verify:
+./DEPLOY_HELPER.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2: Test Locally (2 minutes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+./START_COMPETITION.sh
+
+# In another terminal, test healthcheck:
+curl http://localhost:8000/health
+
+# Should return: {"status":"alive",...}
+
+# Stop with Ctrl+C
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3: Deploy to Railway (10 minutes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login
+railway login
+
+# Create project
+railway init
+
+# Load environment
+source .env.competition
+
+# Set variables (copy ALL these commands)
+railway variables set ETHEREUM_RPC_URL="$ETHEREUM_RPC_URL"
+railway variables set PRIVATE_KEY="$PRIVATE_KEY"
+railway variables set BUNDLE_EXECUTOR_ADDRESS="0x0000000000000000000000000000000000000001"
+railway variables set COW_SOLVER_PORT="8000"
+railway variables set NODE_ENV="production"
+
+# Deploy!
+railway up
+
+# Get your URL
+railway domain
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4: Test Deployed Solver (1 minute)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Replace YOUR_URL with your actual Railway URL
+curl https://YOUR_URL.railway.app/health
+
+# Should return: {"status":"alive",...}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 5: Monitor (ongoing)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# View logs
+railway logs
+
+# Stream logs (real-time)
+railway logs --follow
+
+# Check status
+railway ps
+
+# Restart if needed
+railway restart
+
+════════════════════════════════════════════════════════════════
+✅ YOUR ENDPOINTS (ALL READY!)
+════════════════════════════════════════════════════════════════
+
+GET  /health     → Healthcheck (CoW uses this)
+POST /solve      → Main solver endpoint (CoW uses this)
+GET  /metrics    → Solver statistics
+GET  /           → Info page
+
+All built and ready! No changes needed! ✅
+
+════════════════════════════════════════════════════════════════
+🏆 YOU'RE READY TO DEPLOY!
+════════════════════════════════════════════════════════════════
+
+Just need:
+1. Alchemy RPC URL (alchemy.com - FREE)
+2. MetaMask Private Key
+
+Then run the commands above!
+
+Total time: ~15 minutes ⚡
+
+LET'S GO! 🚀
+

@@ -1,8 +1,8 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { Contract } from "@ethersproject/contracts";
 import { Provider } from "@ethersproject/providers";
-import { EthMarket, MarketType, BuyCalls } from "../EthMarket.js";
-import { logInfo, logError, logDebug, logWarn } from "../utils/logger.js";
+import { EthMarket, MarketType, BuyCalls } from "../EthMarket";
+import { logInfo, logError, logDebug, logWarn } from "../utils/logger";
 
 // Balancer V2 Vault ABI - minimal interface
 const BALANCER_VAULT_ABI = [
@@ -583,5 +583,23 @@ export class BalancerV2Pool extends EthMarket implements MarketType {
      */
     getPoolId(): string {
         return this.poolInfo?.poolId || "";
+    }
+
+    /**
+     * Manually set reserves from CoW auction data (bypasses chain fetching)
+     */
+    async setReservesViaOrderedBalances(balances: BigNumber[]): Promise<void> {
+        if (!balances || balances.length === 0) {
+            throw new Error("Invalid balances provided");
+        }
+
+        this._reserves = [...balances];
+
+        // Update poolInfo balances if it exists
+        if (this.poolInfo) {
+            this.poolInfo.balances = [...balances];
+        }
+
+        logDebug(`Set Balancer pool reserves: ${balances.map(b => b.toString()).join(', ')}`);
     }
 }

@@ -1,5 +1,5 @@
 import { BigNumber, Contract, providers } from "ethers";
-import { UNISWAP_PAIR_ABI } from "../abi.js";
+import { UNISWAP_PAIR_ABI } from "../abi";
 
 export interface CFMM {
     reserves: BigNumber[];

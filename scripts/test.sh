@@ -58,8 +58,8 @@ run_all_tests() {
     echo "  • Scanner tests"
     echo ""
     
-    # Run all test suites
-    npm test
+    # Run all test suites with Mocha
+    npx mocha 'test/**/*.test.ts' --require ts-node/register --timeout 30000 --exit
     
     print_color "\n✅ All tests completed" "$GREEN"
 }
@@ -71,7 +71,7 @@ run_unit_tests() {
     check_test_environment
     
     print_color "🚀 Starting unit tests..." "$GREEN"
-    npm run test:unit || {
+    npx mocha 'test/unit/**/*.test.ts' --require ts-node/register --timeout 30000 --exit || {
         print_color "❌ Unit tests failed" "$RED"
         exit 1
     }
@@ -86,7 +86,7 @@ run_integration_tests() {
     check_test_environment
     
     print_color "🚀 Starting integration tests..." "$GREEN"
-    npm run test:integration || {
+    npx mocha 'test/integration/**/*.test.ts' --require ts-node/register --timeout 60000 --exit || {
         print_color "❌ Integration tests failed" "$RED"
         exit 1
     }

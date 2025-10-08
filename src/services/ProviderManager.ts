@@ -1,5 +1,5 @@
 import { providers } from 'ethers';
-import { logInfo, logError, logWarn } from '../utils/logger.js';
+import { logInfo, logError, logWarn } from '../utils/logger';
 
 export interface ProviderConfig {
     url: string;

@@ -1,7 +1,7 @@
 // types.ts
 
 import { BigNumber } from '@ethersproject/bignumber';
-import { EthMarket } from './EthMarket.js';
+import { EthMarket } from './EthMarket';
 
 export interface MarketType {
     marketAddress: string;
@@ -45,5 +45,5 @@ export interface BuyCalls {
     values: BigNumber[];
 }
 
-export type { EthMarket } from './EthMarket.js';
+export type { EthMarket } from './EthMarket';
   

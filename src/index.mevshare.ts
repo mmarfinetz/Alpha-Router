@@ -1,16 +1,16 @@
 import { ethers, Wallet } from 'ethers';
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
-import { BUNDLE_EXECUTOR_ABI } from './abi.js';
-import { FACTORY_ADDRESSES } from './addresses.js';
-import { UniswapV2EthPair } from './UniswapV2EthPair.js';
-import { MevShareArbitrage } from './MevShareArbitrage.js';
-import { MevShareService } from './services/MevShareService.js';
-import { DEFAULT_THRESHOLDS } from './config/thresholds.js';
-import { logInfo, logError, logDebug } from './utils/logger.js';
+import { BUNDLE_EXECUTOR_ABI } from './abi';
+import { FACTORY_ADDRESSES } from './addresses';
+import { UniswapV2EthPair } from './UniswapV2EthPair';
+import { MevShareArbitrage } from './MevShareArbitrage';
+import { MevShareService } from './services/MevShareService';
+import { DEFAULT_THRESHOLDS } from './config/thresholds';
+import { logInfo, logError, logDebug } from './utils/logger';
 import { providers } from 'ethers';
 import { BigNumber } from 'ethers';
-import { MevShareConfig } from './services/MevShareService.js';
+import { MevShareConfig } from './services/MevShareService';
 
 // Load environment variables
 dotenvConfig({ path: resolve(__dirname, '../.env') });

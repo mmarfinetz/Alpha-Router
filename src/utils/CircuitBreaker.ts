@@ -1,5 +1,5 @@
 import { BigNumber } from 'ethers';
-import { logCircuitBreakerTripped } from './logger.js';
+import { logCircuitBreakerTripped } from './logger';
 
 export interface CircuitBreakerConfig {
     maxFailures: number;

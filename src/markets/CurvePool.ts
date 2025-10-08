@@ -2,8 +2,8 @@ import { BigNumber } from "@ethersproject/bignumber";
 import { Contract } from "@ethersproject/contracts";
 import { Provider } from "@ethersproject/providers";
 import { formatUnits, parseUnits } from "@ethersproject/units";
-import { EthMarket, MarketType, CallDetails, BuyCalls } from "../EthMarket.js";
-import { logInfo, logError, logDebug, logWarn } from "../utils/logger.js";
+import { EthMarket, MarketType, CallDetails, BuyCalls } from "../EthMarket";
+import { logInfo, logError, logDebug, logWarn } from "../utils/logger";
 
 // Curve Pool ABIs - minimal interfaces needed
 const CURVE_POOL_ABI = [
@@ -457,5 +457,23 @@ export class CurvePool extends EthMarket implements MarketType {
      */
     getPoolInfo(): CurvePoolInfo | undefined {
         return this.poolInfo;
+    }
+
+    /**
+     * Manually set reserves from CoW auction data (bypasses chain fetching)
+     */
+    async setReservesViaOrderedBalances(balances: BigNumber[]): Promise<void> {
+        if (!balances || balances.length === 0) {
+            throw new Error("Invalid balances provided");
+        }
+
+        this._reserves = [...balances];
+
+        // Update poolInfo balances if it exists
+        if (this.poolInfo) {
+            this.poolInfo.balances = [...balances];
+        }
+
+        logDebug(`Set Curve pool reserves: ${balances.map(b => b.toString()).join(', ')}`);
     }
 }

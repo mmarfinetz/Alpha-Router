@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: cow-solver
+    env: node
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm run cow:dev
+    envVars:
+      - key: ETHEREUM_RPC_URL
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+      - key: BUNDLE_EXECUTOR_ADDRESS
+        value: "0x0000000000000000000000000000000000000001"
+      - key: COW_SOLVER_PORT
+        value: "8000"
+      - key: NODE_ENV
+        value: "production"

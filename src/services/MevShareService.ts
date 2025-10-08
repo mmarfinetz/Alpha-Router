@@ -1,8 +1,8 @@
 import { Wallet, providers, BigNumber } from 'ethers';
 import { FlashbotsBundleProvider, FlashbotsTransactionResponse } from '@flashbots/ethers-provider-bundle';
-import { logInfo, logError, logMevShareEvent, LogContext } from '../utils/logger.js';
-import { CircuitBreaker } from '../utils/CircuitBreaker.js';
-import { GasPriceManager } from '../utils/GasPriceManager.js';
+import { logInfo, logError, logMevShareEvent, LogContext } from '../utils/logger';
+import { CircuitBreaker } from '../utils/CircuitBreaker';
+import { GasPriceManager } from '../utils/GasPriceManager';
 import { EventEmitter } from 'events';
 
 // Extend LogContext for MEV-Share specific logging

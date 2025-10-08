@@ -1,0 +1,11 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "installCommand": "npm ci --legacy-peer-deps",
+    "buildCommand": "npm run build",
+    "startCommand": "NODE_ENV=production node build/cow/index.js",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

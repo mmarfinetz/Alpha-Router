@@ -1,12 +1,12 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { providers } from "ethers";
 import { formatUnits, formatEther } from "@ethersproject/units";
-import logger from '../utils/logger.js';
-import { MarketsByToken } from '../types.js';
-import { EthMarket } from '../EthMarket.js';
-import { AnalyticalArbitrageEngine, ArbitrageOpportunity, AnalyticalEngineConfig } from '../engines/AnalyticalArbitrageEngine.js';
-import { MARKET_FILTERS, MarketFilters, MarketFilterValidator } from '../config/marketFilters.js';
-import { DEX_INFO } from '../addresses.js';
+import logger from '../utils/logger';
+import { MarketsByToken } from '../types';
+import { EthMarket } from '../EthMarket';
+import { AnalyticalArbitrageEngine, ArbitrageOpportunity, AnalyticalEngineConfig } from '../engines/AnalyticalArbitrageEngine';
+import { MARKET_FILTERS, MarketFilters, MarketFilterValidator } from '../config/marketFilters';
+import { DEX_INFO } from '../addresses';
 
 export interface MarketPrice {
     marketAddress: string;

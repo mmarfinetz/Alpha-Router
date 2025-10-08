@@ -1,5 +1,5 @@
 import { BigNumber, providers } from 'ethers';
-import { logInfo, logError, LogContext } from './logger.js';
+import { logInfo, logError, LogContext } from './logger';
 
 // Extend LogContext for gas-specific logging
 interface GasLogContext extends LogContext {

@@ -7,7 +7,7 @@
  */
 
 import { ethers } from 'ethers';
-import { logInfo as info, logError as error, logWarn as warn } from '../utils/logger.js';
+import { logInfo as info, logError as error, logWarn as warn } from '../utils/logger';
 
 interface BasicScannerConfig {
   scanInterval: number;

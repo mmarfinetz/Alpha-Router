@@ -1,9 +1,9 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { Provider } from "@ethersproject/providers";
 import { Contract } from "@ethersproject/contracts";
-import { EthMarket, MarketType } from "../EthMarket.js";
-import { logInfo, logError, logDebug, logWarn } from "../utils/logger.js";
-import { WETH_ADDRESS } from "../addresses.js";
+import { EthMarket, MarketType } from "../EthMarket";
+import { logInfo, logError, logDebug, logWarn } from "../utils/logger";
+import { WETH_ADDRESS } from "../addresses";
 
 export interface PoolInfo {
     address: string;

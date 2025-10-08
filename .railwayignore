@@ -1,0 +1,11 @@
+node_modules/
+test/
+docs/
+examples/
+frontend/
+*.md
+*.log
+*.sh
+.git/
+build/
+dist/

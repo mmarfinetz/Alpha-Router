@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { BigNumber } from 'ethers';
-import logger from '../utils/logger.js';
+import logger from '../utils/logger';
 
 export interface CachedMarketData {
   volume?: {

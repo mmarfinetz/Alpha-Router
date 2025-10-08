@@ -189,23 +189,20 @@ const formatContext = (context: any) => {
 };
 
 // Create logger instance
-const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || 'info',
-    format: winston.format.combine(
-        bigNumberFormat(),
-        winston.format.timestamp(),
-        winston.format.errors({ stack: true }),
-        winston.format.json()
-    ),
-    defaultMeta: { service: 'mev-arbitrage-bot' },
-    transports: [
-        // Console transport with custom format
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.timestamp(),
-                terminalFormat
-            )
-        }),
+const transports: winston.transport[] = [
+    // Console transport with custom format (always enabled)
+    new winston.transports.Console({
+        format: winston.format.combine(
+            winston.format.timestamp(),
+            terminalFormat
+        )
+    })
+];
+
+// Only add file transports in non-production environments
+// In production (Railway, Docker, etc.), logs go to stdout and are captured by the platform
+if (process.env.NODE_ENV !== 'production') {
+    transports.push(
         // File transport for error logs
         new winston.transports.File({
             filename: 'error.log',
@@ -215,7 +212,19 @@ const logger = winston.createLogger({
         new winston.transports.File({
             filename: 'combined.log'
         })
-    ]
+    );
+}
+
+const logger = winston.createLogger({
+    level: process.env.LOG_LEVEL || 'info',
+    format: winston.format.combine(
+        bigNumberFormat(),
+        winston.format.timestamp(),
+        winston.format.errors({ stack: true }),
+        winston.format.json()
+    ),
+    defaultMeta: { service: 'mev-arbitrage-bot' },
+    transports
 });
 
 // Add additional constraint information to the existing LogContext interface

@@ -2,13 +2,13 @@ import { BigNumber, Contract, Wallet, providers, ethers } from "ethers";
 import { EventEmitter } from "events";
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 import { IPendingTransaction } from "@flashbots/matchmaker-ts";
-import { WETH_ADDRESS } from "./addresses.js";
-import { EthMarket } from "./EthMarket.js";
-import { ETHER, bigNumberToDecimal } from "./utils.js";
-import { MarketsByToken, CrossedMarketDetails } from './types.js';
-import { MarketThresholds } from './config/thresholds.js';
-import { MevShareService } from "./services/MevShareService.js";
-import { UNISWAP_PAIR_ABI } from "./abi.js";
+import { WETH_ADDRESS } from "./addresses";
+import { EthMarket } from "./EthMarket";
+import { ETHER, bigNumberToDecimal } from "./utils";
+import { MarketsByToken, CrossedMarketDetails } from './types';
+import { MarketThresholds } from './config/thresholds';
+import { MevShareService } from "./services/MevShareService";
+import { UNISWAP_PAIR_ABI } from "./abi";
 
 // Use test logger in test environment
 const logger = process.env.NODE_ENV === 'test'

@@ -1,8 +1,8 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import { Contract } from "@ethersproject/contracts";
 import { Provider } from "@ethersproject/providers";
-import { EthMarket, MarketType, BuyCalls } from "../EthMarket.js";
-import { logInfo, logError, logDebug, logWarn } from "../utils/logger.js";
+import { EthMarket, MarketType, BuyCalls } from "../EthMarket";
+import { logInfo, logError, logDebug, logWarn } from "../utils/logger";
 
 // DODO V2 Pool ABI - Proactive Market Maker (PMM) interface
 const DODO_V2_POOL_ABI = [
@@ -562,5 +562,29 @@ export class DODOV2Pool extends EthMarket implements MarketType {
      */
     isPMM(): boolean {
         return this.poolInfo ? !this.poolInfo.k.isZero() : false;
+    }
+
+    /**
+     * Manually set reserves from CoW auction data (bypasses chain fetching)
+     * For DODO PMM, we set targets equal to reserves (balanced state)
+     */
+    async setReservesViaOrderedBalances(balances: BigNumber[]): Promise<void> {
+        if (!balances || balances.length !== 2) {
+            throw new Error("DODO V2 requires exactly 2 balances (base, quote)");
+        }
+
+        this._reserves = [...balances];
+
+        // Update poolInfo if it exists
+        if (this.poolInfo) {
+            this.poolInfo.baseReserve = balances[0];
+            this.poolInfo.quoteReserve = balances[1];
+            // Set targets equal to reserves (balanced state, R = 1)
+            this.poolInfo.baseTarget = balances[0];
+            this.poolInfo.quoteTarget = balances[1];
+            this.poolInfo.rState = RState.ONE; // Balanced state
+        }
+
+        logDebug(`Set DODO V2 pool reserves: base=${balances[0].toString()}, quote=${balances[1].toString()}`);
     }
 }

@@ -1,7 +1,11 @@
+import { getTokenAddress, CURRENT_CHAIN, isArbitrum } from './config/chains';
+
 export const UNISWAP_LOOKUP_CONTRACT_ADDRESS = '0x5EF1009b9FCD4fec3094a5564047e190D72Bd511'
 //mainnet ^^  goerli vv
 //export const UNISWAP_LOOKUP_CONTRACT_ADDRESS = '0xF52FE911458C6a3279832b764cDF0189e49f073A'
-export const WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+
+// WETH address - now chain-aware!
+export const WETH_ADDRESS = getTokenAddress('WETH');
 
 // Uniswap V2
 export const UNISWAP_FACTORY_ADDRESS = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f';
