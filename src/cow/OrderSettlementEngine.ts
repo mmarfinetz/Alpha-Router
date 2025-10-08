@@ -387,15 +387,17 @@ export class OrderSettlementEngine {
 
   /**
    * Find optimal execution path for a single order through available liquidity
+   *
+   * Implements multi-hop pathfinding through intermediary tokens:
+   * - Direct swaps (1 hop)
+   * - Intermediate routing (2-3 hops) through common tokens (WETH, USDC, USDT, DAI, WBTC)
+   * - Accounts for gas costs per hop
+   * - Selects path with maximum net surplus
    */
   private async findOptimalPath(
     order: ParsedOrder,
     marketsByToken: MarketsByToken
   ): Promise<OrderExecutionPath | null> {
-    // For now, implement simple single-hop routing
-    // TODO: Extend to multi-hop routing for better execution
-
-    // Use lowercase token addresses for lookup (normalized)
     const sellToken = order.sellToken.toLowerCase();
     const buyToken = order.buyToken.toLowerCase();
 
@@ -416,29 +418,227 @@ export class OrderSettlementEngine {
 
     logger.debug('Direct markets found', { count: directMarkets.length });
 
-    if (directMarkets.length === 0) {
-      // Try two-hop routing through WETH
-      return await this.findTwoHopPath(order, marketsByToken);
-    }
+    // Collect all possible paths (direct + multi-hop)
+    const candidatePaths: OrderExecutionPath[] = [];
 
-    // Find best direct market
-    let bestPath: OrderExecutionPath | null = null;
-    let bestSurplus = BigNumber.from(0);
-
+    // Try direct paths (most gas efficient)
     for (const market of directMarkets) {
       try {
         const path = await this.evaluateMarketForOrder(order, market as EthMarket);
-        if (path && path.surplus.gt(bestSurplus)) {
-          bestPath = path;
-          bestSurplus = path.surplus;
+        if (path && path.surplus.gt(0)) {
+          candidatePaths.push(path);
         }
       } catch (error) {
-        // Skip this market
         continue;
       }
     }
 
+    // Try multi-hop paths if no direct path or to find better execution
+    const multiHopPaths = await this.findMultiHopPaths(order, marketsByToken);
+    candidatePaths.push(...multiHopPaths);
+
+    if (candidatePaths.length === 0) {
+      logger.debug('No viable paths found for order', { orderUid: order.uid });
+      return null;
+    }
+
+    // Select path with highest net surplus (accounting for gas costs)
+    let bestPath: OrderExecutionPath | null = null;
+    let bestNetSurplus = BigNumber.from(0);
+
+    // Estimate gas price for cost calculations (30 gwei)
+    const gasPrice = BigNumber.from('30000000000');
+
+    for (const path of candidatePaths) {
+      // Calculate net surplus = trading surplus - gas cost
+      const gasCost = path.estimatedGas.mul(gasPrice);
+      const netSurplus = path.surplus.sub(gasCost);
+
+      logger.debug('Evaluating path', {
+        hops: path.route.length,
+        surplus: formatEther(path.surplus),
+        gasCost: formatEther(gasCost),
+        netSurplus: formatEther(netSurplus)
+      });
+
+      if (netSurplus.gt(bestNetSurplus)) {
+        bestPath = path;
+        bestNetSurplus = netSurplus;
+      }
+    }
+
+    if (bestPath) {
+      logger.info('Selected optimal path', {
+        orderUid: order.uid,
+        hops: bestPath.route.length,
+        surplus: formatEther(bestPath.surplus),
+        netSurplus: formatEther(bestNetSurplus)
+      });
+    }
+
     return bestPath;
+  }
+
+  /**
+   * Find all viable multi-hop paths for an order
+   *
+   * Uses BFS-based pathfinding to discover routes through intermediary tokens:
+   * - 2-hop: sellToken → intermediary → buyToken
+   * - 3-hop: sellToken → intermediary1 → intermediary2 → buyToken
+   *
+   * Common intermediaries: WETH, USDC, USDT, DAI, WBTC
+   */
+  private async findMultiHopPaths(
+    order: ParsedOrder,
+    marketsByToken: MarketsByToken
+  ): Promise<OrderExecutionPath[]> {
+    const MAX_HOPS = 3; // Limit to 3 hops to control gas costs
+    const paths: OrderExecutionPath[] = [];
+
+    // Common intermediary tokens (normalized to lowercase)
+    const intermediaryTokens = [
+      WETH_ADDRESS.toLowerCase(), // WETH
+      '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
+      '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT
+      '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+      '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599'  // WBTC
+    ];
+
+    const sellToken = order.sellToken.toLowerCase();
+    const buyToken = order.buyToken.toLowerCase();
+
+    // Filter out sell/buy tokens from intermediaries
+    const validIntermediaries = intermediaryTokens.filter(
+      t => t !== sellToken && t !== buyToken
+    );
+
+    // BFS structure: [currentToken, pathSoFar, currentAmount]
+    interface PathNode {
+      token: string;
+      markets: EthMarket[];
+      amount: BigNumber;
+      hopCount: number;
+    }
+
+    const queue: PathNode[] = [{
+      token: sellToken,
+      markets: [],
+      amount: order.sellAmount.sub(order.feeAmount),
+      hopCount: 0
+    }];
+
+    const visited = new Set<string>(); // Track visited tokens to prevent loops
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+
+      if (current.hopCount >= MAX_HOPS) {
+        continue; // Don't explore beyond max hops
+      }
+
+      // Mark as visited
+      const visitKey = `${current.token}-${current.hopCount}`;
+      if (visited.has(visitKey)) continue;
+      visited.add(visitKey);
+
+      // Get markets for current token
+      const currentMarkets = marketsByToken[current.token] || [];
+
+      for (const market of currentMarkets) {
+        const ethMarket = market as EthMarket;
+
+        // Find which token we would receive from this market
+        const outputToken = ethMarket.tokens
+          .find(t => t.toLowerCase() !== current.token)
+          ?.toLowerCase();
+
+        if (!outputToken) continue;
+
+        // Skip if we've seen this token in current path (prevent loops)
+        if (current.markets.some(m => m.tokens.some(t => t.toLowerCase() === outputToken))) {
+          continue;
+        }
+
+        try {
+          // Calculate output amount for this hop
+          const reserves = await ethMarket.getReservesByToken();
+          if (!Array.isArray(reserves) || reserves.length !== 2) continue;
+
+          const tokenIndexIn = ethMarket.tokens.findIndex(t => t.toLowerCase() === current.token);
+          const tokenIndexOut = ethMarket.tokens.findIndex(t => t.toLowerCase() === outputToken);
+
+          if (tokenIndexIn === -1 || tokenIndexOut === -1) continue;
+
+          const reserveIn = reserves[tokenIndexIn];
+          const reserveOut = reserves[tokenIndexOut];
+
+          if (reserveIn.isZero() || reserveOut.isZero()) continue;
+
+          // Calculate output using constant product formula
+          const amountInWithFee = current.amount.mul(this.UNISWAP_FEE);
+          const numerator = amountInWithFee.mul(reserveOut);
+          const denominator = reserveIn.mul(this.UNISWAP_FEE_DENOM).add(amountInWithFee);
+          const outputAmount = numerator.div(denominator);
+
+          if (outputAmount.isZero()) continue;
+
+          const newPath = [...current.markets, ethMarket];
+          const newHopCount = current.hopCount + 1;
+
+          // Check if we reached the target token
+          if (outputToken === buyToken) {
+            // Complete path found!
+            const clearingPrice = outputAmount.mul(this.PRECISION).div(order.sellAmount.sub(order.feeAmount));
+
+            let surplus: BigNumber;
+            if (order.kind === 'sell') {
+              surplus = outputAmount.sub(order.minBuyAmountAfterFee);
+            } else {
+              // For buy orders: calculate how much input we actually need
+              const maxInput = order.maxSellAmountAfterFee;
+              surplus = maxInput.sub(order.sellAmount.sub(order.feeAmount));
+            }
+
+            if (surplus.gt(0)) {
+              paths.push({
+                order,
+                route: newPath,
+                inputAmount: order.sellAmount.sub(order.feeAmount),
+                outputAmount,
+                estimatedGas: BigNumber.from(150000 + 100000 * (newHopCount - 1)), // Base + per hop
+                clearingPrice,
+                surplus
+              });
+
+              logger.debug('Found multi-hop path', {
+                hops: newHopCount,
+                route: newPath.map(m => m.marketAddress).join(' → '),
+                outputAmount: formatEther(outputAmount),
+                surplus: formatEther(surplus)
+              });
+            }
+          } else if (validIntermediaries.includes(outputToken)) {
+            // This is a valid intermediary - continue exploring
+            queue.push({
+              token: outputToken,
+              markets: newPath,
+              amount: outputAmount,
+              hopCount: newHopCount
+            });
+          }
+        } catch (error) {
+          // Skip this market on error
+          continue;
+        }
+      }
+    }
+
+    logger.debug('Multi-hop pathfinding complete', {
+      pathsFound: paths.length,
+      maxHops: MAX_HOPS
+    });
+
+    return paths;
   }
 
   /**
@@ -527,114 +727,6 @@ export class OrderSettlementEngine {
       inputAmount,
       outputAmount,
       estimatedGas: BigNumber.from(150000), // Single swap gas estimate
-      clearingPrice,
-      surplus
-    };
-  }
-
-  /**
-   * Find two-hop path through WETH (or other intermediary)
-   */
-  private async findTwoHopPath(
-    order: ParsedOrder,
-    marketsByToken: MarketsByToken
-  ): Promise<OrderExecutionPath | null> {
-    // Find paths: sellToken -> WETH -> buyToken
-    const weth = WETH_ADDRESS.toLowerCase();
-
-    const sellToWethMarkets = (marketsByToken[order.sellToken] || [])
-      .filter(m => marketsByToken[weth]?.includes(m));
-
-    const wethToBuyMarkets = (marketsByToken[weth] || [])
-      .filter(m => marketsByToken[order.buyToken]?.includes(m));
-
-    if (sellToWethMarkets.length === 0 || wethToBuyMarkets.length === 0) {
-      return null;
-    }
-
-    // Try all combinations and find best
-    let bestPath: OrderExecutionPath | null = null;
-    let bestSurplus = BigNumber.from(0);
-
-    for (const market1 of sellToWethMarkets) {
-      for (const market2 of wethToBuyMarkets) {
-        try {
-          const path = await this.evaluateTwoHopPath(
-            order,
-            market1 as EthMarket,
-            market2 as EthMarket
-          );
-
-          if (path && path.surplus.gt(bestSurplus)) {
-            bestPath = path;
-            bestSurplus = path.surplus;
-          }
-        } catch (error) {
-          continue;
-        }
-      }
-    }
-
-    return bestPath;
-  }
-
-  /**
-   * Evaluate a two-hop path for order execution
-   */
-  private async evaluateTwoHopPath(
-    order: ParsedOrder,
-    market1: EthMarket,
-    market2: EthMarket
-  ): Promise<OrderExecutionPath | null> {
-    // Get reserves for both markets
-    const reserves1 = await market1.getReservesByToken();
-    const reserves2 = await market2.getReservesByToken();
-
-    if (!Array.isArray(reserves1) || !Array.isArray(reserves2)) {
-      return null;
-    }
-
-    // First hop: sellToken -> WETH
-    const inputAmount = order.sellAmount.sub(order.feeAmount);
-    const [reserveIn1, reserveOut1] = reserves1;
-
-    const amountInWithFee1 = inputAmount.mul(this.UNISWAP_FEE);
-    const numerator1 = amountInWithFee1.mul(reserveOut1);
-    const denominator1 = reserveIn1.mul(this.UNISWAP_FEE_DENOM).add(amountInWithFee1);
-    const intermediateAmount = numerator1.div(denominator1);
-
-    // Second hop: WETH -> buyToken
-    const [reserveIn2, reserveOut2] = reserves2;
-
-    const amountInWithFee2 = intermediateAmount.mul(this.UNISWAP_FEE);
-    const numerator2 = amountInWithFee2.mul(reserveOut2);
-    const denominator2 = reserveIn2.mul(this.UNISWAP_FEE_DENOM).add(amountInWithFee2);
-    const outputAmount = numerator2.div(denominator2);
-
-    // Calculate effective clearing price
-    const clearingPrice = outputAmount.mul(this.PRECISION).div(inputAmount);
-
-    // Calculate surplus
-    let surplus: BigNumber;
-
-    if (order.kind === 'sell') {
-      surplus = outputAmount.sub(order.minBuyAmountAfterFee);
-    } else {
-      // For buy orders with two-hop, we need to calculate backwards
-      // This is more complex - simplified for now
-      surplus = BigNumber.from(0);
-    }
-
-    if (surplus.lte(0)) {
-      return null;
-    }
-
-    return {
-      order,
-      route: [market1, market2],
-      inputAmount,
-      outputAmount,
-      estimatedGas: BigNumber.from(250000), // Two swaps
       clearingPrice,
       surplus
     };

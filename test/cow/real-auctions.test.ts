@@ -12,7 +12,7 @@
  */
 
 import { ethers } from 'ethers';
-import { CowSolver } from './src/cow/CowSolver';
+import { CoWAdapter } from '../../src/cow/CoWAdapter';
 import axios from 'axios';
 
 const COW_API_BASE = 'https://api.cow.fi/arbitrum_one';
@@ -60,7 +60,7 @@ interface TestResult {
 }
 
 class RealAuctionTester {
-  private solver: CowSolver;
+  private solver: CoWAdapter;
   private provider: ethers.providers.JsonRpcProvider;
 
   constructor() {
@@ -69,7 +69,7 @@ class RealAuctionTester {
       throw new Error('ETHEREUM_RPC_URL or ARBITRUM_RPC_URL must be set');
     }
     this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-    this.solver = new CowSolver(this.provider, process.env.SOLVER_ADDRESS || ethers.constants.AddressZero);
+    this.solver = new CoWAdapter(this.provider);
   }
 
   /**
@@ -162,11 +162,14 @@ class RealAuctionTester {
       // 3. Call our solver
       // 4. Compare results
 
+      // CoWAdapter expects full auction format
       const ourSolution = await this.solver.solve({
-        id: competition.auctionId.toString(),
-        orders: [], // Would need to decode auction.orders
-        tokens: [],
+        id: competition.auctionId,
+        orders: auction.orders || [], // Real orders from CoW API
+        liquidity: auction.amms || [], // Real liquidity from CoW API
+        effectiveGasPrice: competition.auction?.gasPrice || '30000000000',
         deadline: Math.floor(Date.now() / 1000) + 300,
+        surplus_capturing_jit_order_owners: []
       });
 
       const responseTime = Date.now() - startTime;

@@ -44,6 +44,8 @@ export class CrossDEXScanner {
     private readonly analyticalEngine: AnalyticalArbitrageEngine;
     private priceCache: Map<string, MarketPrice> = new Map();
     private lastScanTime: number = 0;
+    private cacheHits: number = 0;
+    private cacheMisses: number = 0;
     private scanStats = {
         totalScans: 0,
         opportunitiesFound: 0,
@@ -204,12 +206,14 @@ export class CrossDEXScanner {
     private async updateMarketPriceEnhanced(market: EthMarket, tokenAddress: string): Promise<MarketPrice | null> {
         const cacheKey = `${market.marketAddress}-${tokenAddress}`;
         const now = Date.now();
-        
+
         // Check cache first
         const cached = this.priceCache.get(cacheKey);
         if (cached && (now - cached.lastUpdated) < this.config.maxLatencyMs) {
+            this.cacheHits++;
             return cached;
         }
+        this.cacheMisses++;
 
         try {
             // Get fresh reserves
@@ -275,12 +279,14 @@ export class CrossDEXScanner {
     private async updateMarketPrice(market: EthMarket, tokenAddress: string): Promise<MarketPrice | null> {
         const cacheKey = `${market.marketAddress}-${tokenAddress}`;
         const now = Date.now();
-        
+
         // Check cache first
         const cached = this.priceCache.get(cacheKey);
         if (cached && (now - cached.lastUpdated) < this.config.maxLatencyMs) {
+            this.cacheHits++;
             return cached;
         }
+        this.cacheMisses++;
 
         try {
             // Get fresh reserves
@@ -571,10 +577,18 @@ export class CrossDEXScanner {
 
     /**
      * Calculate cache hit rate for monitoring
+     *
+     * Returns the percentage of cache hits vs total cache accesses.
+     * Higher rates indicate good cache utilization and reduced RPC calls.
      */
     private calculateCacheHitRate(): number {
-        // This would be implemented with actual tracking in production
-        return 0.75; // Placeholder
+        const totalAccesses = this.cacheHits + this.cacheMisses;
+
+        if (totalAccesses === 0) {
+            return 0; // No cache accesses yet
+        }
+
+        return this.cacheHits / totalAccesses;
     }
 
     /**
@@ -806,6 +820,9 @@ export class CrossDEXScanner {
      */
     public async forceRefreshPrices(marketsByToken: MarketsByToken): Promise<void> {
         this.priceCache.clear();
+        // Reset cache statistics when forcing refresh
+        this.cacheHits = 0;
+        this.cacheMisses = 0;
         await this.updateAllMarketPrices(marketsByToken);
     }
 }

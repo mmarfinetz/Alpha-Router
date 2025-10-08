@@ -194,11 +194,66 @@ export class RouteSplitter {
 
   /**
    * Get liquidity depth of a route
+   *
+   * For single-hop: returns minimum of the two reserves (effective liquidity depth)
+   * For multi-hop: returns minimum liquidity across all hops (bottleneck approach)
+   *
+   * This is critical for liquidity-weighted splitting to allocate more flow
+   * to deeper markets and avoid excessive price impact on shallow pools.
    */
   private getRouteLiquidity(route: OrderExecutionPath): BigNumber {
-    // Get reserves of first market as proxy for liquidity
-    // In reality, would need to properly calculate route liquidity
-    return BigNumber.from('1000000000000000000'); // Placeholder 1 ETH
+    if (route.route.length === 0) {
+      return BigNumber.from(0);
+    }
+
+    try {
+      // For multi-hop routes, liquidity is limited by the smallest pool (bottleneck)
+      let minLiquidity = BigNumber.from('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'); // Max uint256
+
+      for (const market of route.route) {
+        // Get reserves for this market
+        // Note: This is synchronous access to cached reserves
+        // Markets should have updated reserves from recent calls
+        const reserves = market.getReserves ? market.getReserves() : null;
+
+        if (!reserves || !Array.isArray(reserves) || reserves.length !== 2) {
+          // If we can't get reserves for any hop, route has unknown liquidity
+          logger.warn('Unable to get reserves for liquidity calculation', {
+            marketAddress: market.marketAddress
+          });
+          return BigNumber.from(0);
+        }
+
+        const [reserve0, reserve1] = reserves;
+
+        // Effective liquidity is the minimum of the two reserves
+        // This represents how much can be swapped before severe price impact
+        const effectiveLiquidity = reserve0.lt(reserve1) ? reserve0 : reserve1;
+
+        // Track minimum across all hops
+        if (effectiveLiquidity.lt(minLiquidity)) {
+          minLiquidity = effectiveLiquidity;
+        }
+      }
+
+      // Sanity check
+      if (minLiquidity.eq(BigNumber.from('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'))) {
+        return BigNumber.from(0);
+      }
+
+      logger.debug('Calculated route liquidity', {
+        hops: route.route.length,
+        liquidity: minLiquidity.toString()
+      });
+
+      return minLiquidity;
+
+    } catch (error) {
+      logger.warn('Error calculating route liquidity', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return BigNumber.from(0);
+    }
   }
 
   /**

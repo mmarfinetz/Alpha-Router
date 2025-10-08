@@ -171,9 +171,65 @@ export class CurveScanner extends ProtocolScanner {
     }
 
     private async scanCryptoRegistry(limit: number): Promise<CurvePoolInfo[]> {
-        // Simplified - would implement similar to scanRegistryPools but for crypto registry
-        // For now, return empty array
-        return [];
+        const pools: CurvePoolInfo[] = [];
+
+        try {
+            // Curve Crypto Registry contract
+            const cryptoRegistryAddress = PROTOCOL_REGISTRIES.CURVE.CRYPTO_REGISTRY;
+            const cryptoRegistry = new Contract(
+                cryptoRegistryAddress,
+                CURVE_REGISTRY_ABI,
+                this.provider
+            );
+
+            // Get pool count from crypto registry
+            const poolCount = await cryptoRegistry.pool_count();
+            const maxToScan = Math.min(poolCount.toNumber(), limit);
+
+            logDebug(`Scanning ${maxToScan} pools from Curve crypto registry`);
+
+            // Batch pool info requests
+            const batchSize = 10;
+            for (let i = 0; i < maxToScan && pools.length < limit; i += batchSize) {
+                const batch = [];
+                for (let j = i; j < Math.min(i + batchSize, maxToScan); j++) {
+                    batch.push(cryptoRegistry.pool_list(j));
+                }
+
+                const poolAddresses = await Promise.all(batch);
+
+                for (const poolAddress of poolAddresses) {
+                    if (this.knownPools.has(poolAddress)) {
+                        pools.push(this.knownPools.get(poolAddress)!);
+                        continue;
+                    }
+
+                    try {
+                        const poolInfo = await this.getPoolInfo(poolAddress);
+                        if (poolInfo && this.validatePool(poolInfo)) {
+                            // Mark as crypto pool (volatile assets)
+                            poolInfo.poolType = 'crypto';
+                            pools.push(poolInfo);
+                            this.knownPools.set(poolAddress, poolInfo);
+                        }
+                    } catch (error) {
+                        // Skip failed pools
+                        logWarn(`Failed to get crypto pool info for ${poolAddress}`);
+                    }
+
+                    if (pools.length >= limit) break;
+                }
+            }
+
+            logInfo(`Scanned ${pools.length} Curve crypto pools`);
+
+        } catch (error) {
+            logError("Failed to scan Curve crypto registry", {
+                error: error as Error
+            });
+        }
+
+        return pools;
     }
 
     private async getPoolInfo(poolAddress: string): Promise<CurvePoolInfo | null> {
