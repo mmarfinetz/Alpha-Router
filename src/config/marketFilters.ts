@@ -81,14 +81,14 @@ export const MARKET_FILTERS: MarketFilters = {
 // Additional filter configurations for different market conditions
 export const AGGRESSIVE_MARKET_FILTERS: MarketFilters = {
   ...MARKET_FILTERS,
-  minLiquidityETH: 0.05,
-  minSpreadBasisPoints: 5, // 0.05%
-  MIN_LIQUIDITY_USD: 5000,
-  MIN_PROFIT_ETH: BigNumber.from('500000000000000'), // 0.0005 ETH
-  MAX_PRICE_IMPACT: 0.1, // 10%
-  MIN_SPREAD_BASIS_POINTS: 5,
-  MAX_SLIPPAGE_PERCENT: 10,
-  MAX_TRADE_PERCENT_OF_LIQUIDITY: 15,
+  minLiquidityETH: 0.01, // 0.01 ETH for CoW Protocol
+  minSpreadBasisPoints: 0, // No spread required for user orders
+  MIN_LIQUIDITY_USD: 10, // $10 minimum (very permissive for CoW)
+  MIN_PROFIT_ETH: BigNumber.from('100000000000000'), // 0.0001 ETH
+  MAX_PRICE_IMPACT: 0.5, // 50% (accept high impact for small orders)
+  MIN_SPREAD_BASIS_POINTS: 0, // No minimum spread
+  MAX_SLIPPAGE_PERCENT: 50, // Accept high slippage for routing
+  MAX_TRADE_PERCENT_OF_LIQUIDITY: 50, // Allow larger trades
 };
 
 export const CONSERVATIVE_MARKET_FILTERS: MarketFilters = {
@@ -108,10 +108,10 @@ export class MarketFilterValidator {
   static validateLiquidity(reserves: [BigNumber, BigNumber], filters: MarketFilters): boolean {
     const [reserve0, reserve1] = reserves;
     
-    // Check minimum reserves
+    // Check minimum reserves (use much lower threshold for CoW Protocol)
     const totalReserves = reserve0.add(reserve1);
-    const minLiquidityWei = BigNumber.from('1000000000000000000') // 1 ETH
-      .mul(filters.MIN_LIQUIDITY_USD || 10000)
+    const minLiquidityWei = BigNumber.from('10000000000000000') // 0.01 ETH (CoW default)
+      .mul(filters.MIN_LIQUIDITY_USD || 10)
       .div(3000); // Assume 1 ETH = $3000 for rough USD conversion
     
     if (totalReserves.lt(minLiquidityWei)) {

@@ -305,13 +305,14 @@ export class CrossDEXScanner {
             // Calculate price (token1/token0 ratio with 18 decimal precision)
             const price = reserve1.mul(BigNumber.from('1000000000000000000')).div(reserve0);
             
-            // Calculate total liquidity (simplified as sum of reserves)
-            const liquidity = reserve0.add(reserve1);
+            // Calculate total liquidity - use larger reserve as proxy
+            const liquidity = reserve0.gt(reserve1) ? reserve0 : reserve1;
             
-            // Apply minimum liquidity filter
-            if (liquidity.lt(this.config.minLiquidityWei)) {
-                return null;
-            }
+            // For CoW Protocol: Skip liquidity filter - route through whatever is available
+            // (The order settlement engine will handle feasibility checks)
+            // if (liquidity.lt(this.config.minLiquidityWei)) {
+            //     return null;
+            // }
 
             const marketPrice: MarketPrice = {
                 marketAddress: market.marketAddress,

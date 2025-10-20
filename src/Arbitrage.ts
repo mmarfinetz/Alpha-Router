@@ -182,7 +182,7 @@ export class Arbitrage {
             minSpreadBasisPoints: 50, // 0.5% minimum spread
             maxLatencyMs: 30000, // 30 seconds max data age
             batchSize: 10, // Process 10 markets at a time
-            minLiquidityWei: thresholds.minLiquidityWei || BigNumber.from('1000000000000000000'), // 1 ETH
+            minLiquidityWei: thresholds.minLiquidityWei || BigNumber.from('10000000000000000'), // 0.01 ETH (CoW default)
             maxGasPriceGwei: BigNumber.from('100'),
             marketFilters: AGGRESSIVE_MARKET_FILTERS,
             enableDetailedLogging: false,

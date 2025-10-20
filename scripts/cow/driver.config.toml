@@ -1,0 +1,40 @@
+# Driver Configuration for Local CoW Protocol Testing
+# Place this file in the cowprotocol/services directory
+
+[http-server]
+addr = "0.0.0.0:11088"
+
+# Your GA-based solver
+[[solver]]
+name = "ga-solver"
+endpoint = "http://localhost:8000"
+relative-slippage = "0.001"           # 0.1% max slippage
+absolute-slippage = "1000000000000000000"  # 1 ETH absolute slippage
+
+# Optional: Add baseline for comparison
+# [[solver]]
+# name = "baseline"
+# endpoint = "http://localhost:8001"
+# relative-slippage = "0.001"
+# absolute-slippage = "1000000000000000000"
+
+[settlement]
+# Settlement contract (mainnet)
+address = "0x9008D19f58AAbD9eD0D60971565AA8510560ab41"
+
+[liquidity]
+# Enable liquidity sources your solver supports
+uniswap-v2 = ["UniswapV2", "Sushiswap"]
+uniswap-v3 = ["UniswapV3"]
+balancer-v2 = true
+curve = true
+# zeroex = false  # Disable for faster testing
+
+[contracts]
+gp-v2-settlement = "0x9008D19f58AAbD9eD0D60971565AA8510560ab41"
+weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
+[price-estimation]
+# Use driver's built-in price estimation for comparison
+enabled = true
+

@@ -22,6 +22,7 @@ import { Arbitrage } from '../Arbitrage';
 import { CircuitBreaker } from '../utils/CircuitBreaker';
 import { GasPriceManager } from '../utils/GasPriceManager';
 import { DEFAULT_THRESHOLDS } from '../config/thresholds';
+import { COW_SOLVER_THRESHOLDS } from '../config/cow-thresholds';
 import { EthMarket } from '../EthMarket';
 import { BalancerV2Pool, BalancerPoolType } from '../markets/BalancerV2Pool';
 import { CurvePool } from '../markets/CurvePool';
@@ -30,6 +31,7 @@ import { DODOV2Pool } from '../markets/DODOV2Pool';
 import { GasEstimator } from './utils/GasEstimator';
 import { RouteSplitter } from './routing/RouteSplitter';
 import { solverMetrics, AuctionMetrics } from './monitoring/SolverMetrics';
+import { HybridGAEngine } from '../engines/HybridGAEngine';
 
 export class CoWAdapter {
   private orderCache: Map<string, CoWOrder> = new Map();
@@ -37,6 +39,7 @@ export class CoWAdapter {
   private settlementEngine: OrderSettlementEngine;
   private oracleManager: OracleManager;
   private arbitrage: Arbitrage | null = null;
+  private hybridGAEngine: HybridGAEngine | null = null;
   private gasEstimator: GasEstimator;
   private routeSplitter: RouteSplitter;
   private readonly PRECISION = BigNumber.from('1000000000000000000');
@@ -71,12 +74,25 @@ export class CoWAdapter {
           wallet,
           provider as any,
           bundleExecutor,
-          DEFAULT_THRESHOLDS,
+          COW_SOLVER_THRESHOLDS,  // Use CoW-specific thresholds (much more permissive)
           circuitBreaker,
           gasPriceManager
         );
 
-        logger.info('Advanced routing engine initialized');
+        // Initialize Hybrid GA Engine for multi-path optimization
+        this.hybridGAEngine = new HybridGAEngine(
+          wallet,
+          provider as any,
+          bundleExecutor,
+          COW_SOLVER_THRESHOLDS,
+          circuitBreaker,
+          gasPriceManager
+        );
+
+        logger.info('Advanced routing engine initialized', {
+          arbitrage: true,
+          geneticAlgorithm: true
+        });
       } catch (error) {
         logger.warn('Failed to initialize Arbitrage, using basic routing', {
           error: error instanceof Error ? error.message : String(error)
@@ -138,16 +154,17 @@ export class CoWAdapter {
     try {
       let market: EthMarket | null = null;
 
-      // Uniswap V2 / Constant Product
-      if (pool.kind === 'ConstantProduct' || pool.kind === 'UniswapV2') {
+      // Uniswap V2 / Constant Product (case-insensitive)
+      const poolKind = pool.kind.toLowerCase();
+      if (poolKind === 'constantproduct' || poolKind === 'uniswapv2') {
         market = await this.createUniswapV2Market(pool);
       }
       // Balancer Weighted Pools
-      else if (pool.kind === 'WeightedProduct' || pool.kind === 'BalancerV2') {
+      else if (poolKind === 'weightedproduct' || poolKind === 'balancerv2' || poolKind === 'weighted') {
         market = await this.createBalancerMarket(pool);
       }
       // Curve Stable Pools
-      else if (pool.kind === 'Stable' || pool.kind === 'Curve') {
+      else if (poolKind === 'stable' || poolKind === 'curve') {
         market = await this.createCurveMarket(pool);
       }
       // Kyber DMM
@@ -167,18 +184,26 @@ export class CoWAdapter {
       if (!market) return;
 
       // Add to markets by token (use lowercase for consistency)
-      for (const token of pool.tokens) {
+      // Handle both array and object formats
+      const tokenAddresses = Array.isArray(pool.tokens) 
+        ? pool.tokens 
+        : Object.keys(pool.tokens);
+      
+      for (const token of tokenAddresses) {
         const tokenKey = token.toLowerCase();
         if (!marketsByToken[tokenKey]) marketsByToken[tokenKey] = [];
         marketsByToken[tokenKey].push(market);
       }
 
-      logger.debug(`✅ Added ${pool.kind} pool: ${pool.tokens.join('/')}`);
+      logger.debug(`✅ Added ${pool.kind} pool: ${tokenAddresses.join('/')}`);
 
     } catch (error: any) {
+      const tokenAddresses = Array.isArray(pool.tokens) 
+        ? pool.tokens 
+        : Object.keys(pool.tokens);
       logger.warn(`❌ Failed to add ${pool.kind} pool`, {
         error: error.message,
-        tokens: pool.tokens
+        tokens: tokenAddresses
       });
     }
   }
@@ -187,8 +212,26 @@ export class CoWAdapter {
    * Create Uniswap V2 market (existing logic)
    */
   private async createUniswapV2Market(pool: CoWLiquidity): Promise<EthMarket | null> {
-    const [token0, token1] = pool.tokens;
-    const [reserve0, reserve1] = pool.reserves.map(r => BigNumber.from(r));
+    // Handle both array and object formats for tokens
+    let tokens: string[];
+    let reserves: BigNumber[];
+    
+    if (Array.isArray(pool.tokens)) {
+      tokens = pool.tokens;
+      reserves = pool.reserves.map(r => BigNumber.from(r));
+    } else {
+      // Object format: { "0xabc...": { "balance": "123" }, ... }
+      tokens = Object.keys(pool.tokens);
+      reserves = tokens.map(addr => BigNumber.from((pool.tokens as any)[addr].balance));
+    }
+
+    if (tokens.length !== 2) {
+      logger.warn(`ConstantProduct pool must have exactly 2 tokens, got ${tokens.length}`);
+      return null;
+    }
+
+    const [token0, token1] = tokens;
+    const [reserve0, reserve1] = reserves;
 
     if (reserve0.isZero() || reserve1.isZero()) {
       return null;
@@ -203,6 +246,11 @@ export class CoWAdapter {
     );
 
     await pair.setReservesViaOrderedBalances([reserve0, reserve1]);
+    
+    // Verify reserves are accessible
+    const testReserves = await pair.getReservesByToken();
+    logger.debug(`✅ Created market with reserves: ${Array.isArray(testReserves) ? testReserves[0].toString() + ', ' + testReserves[1].toString() : 'ERROR: Not an array'}`);
+    
     return pair;
   }
 
@@ -640,11 +688,166 @@ export class CoWAdapter {
   }
 
   /**
-   * Use Arbitrage.evaluateMarkets() to find optimal routes with:
-   * - Dual decomposition
-   * - CFMM optimization
-   * - Multi-hop routing
-   * - Split routes
+   * Find all possible routes for an order (for multi-path optimization)
+   */
+  private async findAllRoutesForOrder(
+    order: ParsedOrder,
+    marketsByToken: MarketsByToken
+  ): Promise<OrderExecutionPath[]> {
+    const routes: OrderExecutionPath[] = [];
+    const sellToken = order.sellToken.toLowerCase();
+    const buyToken = order.buyToken.toLowerCase();
+
+    // Find all markets that trade this token pair
+    const sellMarkets = marketsByToken[sellToken] || [];
+    const buyMarkets = marketsByToken[buyToken] || [];
+    
+    logger.info(`  Markets for ${sellToken.substring(0, 10)}: ${sellMarkets.length}, Markets for ${buyToken.substring(0, 10)}: ${buyMarkets.length}`);
+    
+    // Find direct markets (pools that have both tokens)
+    const directMarkets = sellMarkets.filter(m => 
+      m.tokens.map(t => t.toLowerCase()).includes(buyToken)
+    );
+
+    logger.info(`  Direct markets that trade this pair: ${directMarkets.length}`);
+
+    if (directMarkets.length === 0) {
+      logger.warn(`  ❌ No direct markets for ${sellToken.substring(0, 10)} → ${buyToken.substring(0, 10)}`);
+      logger.info(`  Available tokens in marketsByToken: ${Object.keys(marketsByToken).map(t => t.substring(0, 10)).join(', ')}`);
+      return routes;
+    }
+
+    logger.info(`  Evaluating ${directMarkets.length} potential routes...`);
+
+    // Evaluate each market
+    for (const market of directMarkets) {
+      try {
+        logger.info(`    Testing route via ${market.protocol} at ${market.marketAddress.substring(0, 10)}...`);
+        
+        // Debug: Check market reserves
+        const reserves = await market.getReservesByToken();
+        if (Array.isArray(reserves)) {
+          logger.info(`    Market reserves: [${reserves[0].toString()}, ${reserves[1].toString()}]`);
+          logger.info(`    Market tokens: [${market.tokens[0].substring(0, 10)}, ${market.tokens[1].substring(0, 10)}]`);
+        }
+        
+        // Get output amount for this route
+        const output = await market.getTokensOut(
+          sellToken,
+          buyToken,
+          order.sellAmount
+        );
+
+        // Get token decimals from auction data (default to 18 if not available)
+        const buyTokenDecimals = 18; // TODO: Get from auction.tokens[buyToken].decimals
+        
+        logger.info(`    Output: ${ethers.utils.formatUnits(output, buyTokenDecimals)} (raw: ${output.toString()})`);
+        logger.info(`    Required: ${ethers.utils.formatUnits(order.buyAmount, buyTokenDecimals)} (raw: ${order.buyAmount.toString()})`);
+
+        // Only include if it meets the order's minimum output requirement (compare raw values)
+        if (output.gte(order.buyAmount)) {
+          const surplus = output.sub(order.buyAmount);
+          
+          routes.push({
+            order,
+            route: [market],
+            inputAmount: order.sellAmount,
+            outputAmount: output,
+            estimatedGas: BigNumber.from('150000'), // Single swap gas estimate
+            clearingPrice: output.mul(this.PRECISION).div(order.sellAmount),
+            surplus
+          });
+
+          logger.info(`    ✅ Valid route via ${market.protocol}: output=${ethers.utils.formatUnits(output, 18)}, surplus=${ethers.utils.formatUnits(surplus, 18)}`);
+        } else {
+          logger.warn(`    ❌ Route via ${market.protocol} insufficient: output=${ethers.utils.formatUnits(output, 18)} < required=${ethers.utils.formatUnits(order.buyAmount, 18)}`);
+        }
+      } catch (error) {
+        logger.error(`    💥 Route evaluation FAILED for ${market.protocol}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Sort by output amount (best first)
+    routes.sort((a, b) => (b.outputAmount.gt(a.outputAmount) ? 1 : -1));
+
+    return routes;
+  }
+
+  /**
+   * Route a single order through available liquidity to maximize output (DEPRECATED - use findAllRoutesForOrder)
+   */
+  private async routeOrderThroughLiquidity(
+    order: ParsedOrder,
+    marketsByToken: MarketsByToken
+  ): Promise<OrderExecutionPath | null> {
+    const routes = await this.findAllRoutesForOrder(order, marketsByToken);
+    return routes.length > 0 ? routes[0] : null;
+  }
+
+  /**
+   * Use Genetic Algorithm to optimize multi-path routing for an order
+   */
+  private async optimizeWithGA(
+    order: ParsedOrder,
+    candidatePaths: OrderExecutionPath[],
+    marketsByToken: MarketsByToken
+  ): Promise<OrderExecutionPath | null> {
+    if (!this.hybridGAEngine || candidatePaths.length === 0) {
+      return null;
+    }
+
+    try {
+      logger.info(`  🧬 Running GA optimization for ${candidatePaths.length} candidate paths...`);
+      
+      // Run the hybrid GA engine with order size for context
+      const opportunities = await this.hybridGAEngine.evaluateMarkets(
+        marketsByToken,
+        order.sellAmount
+      );
+      
+      if (!opportunities || opportunities.length === 0) {
+        logger.info(`  GA found no improvement over single-path routing`);
+        return null;
+      }
+
+      logger.info(`  ✅ GA found ${opportunities.length} opportunities`);
+
+      // Find opportunity that matches this order's token pair
+      const matchingOpp = opportunities.find(opp => {
+        const buyMarket = opp.buyFromMarket;
+        const sellMarket = opp.sellToMarket;
+        // Check if this opportunity can fulfill the order
+        return (
+          buyMarket.tokens.some(t => t.toLowerCase() === order.sellToken.toLowerCase()) &&
+          sellMarket.tokens.some(t => t.toLowerCase() === order.buyToken.toLowerCase())
+        );
+      });
+
+      if (!matchingOpp) {
+        logger.info(`  No GA opportunity matches this order's token pair`);
+        return null;
+      }
+
+      // Convert opportunity to execution path
+      return {
+        order,
+        route: [matchingOpp.buyFromMarket, matchingOpp.sellToMarket],
+        inputAmount: order.sellAmount,
+        outputAmount: matchingOpp.profit, // Using profit as output for now
+        estimatedGas: BigNumber.from('250000'), // Multi-hop estimate
+        clearingPrice: this.PRECISION,
+        surplus: matchingOpp.profit
+      };
+
+    } catch (error) {
+      logger.warn(`  GA optimization failed: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Route CoW Protocol user orders to maximize surplus
+   * Uses multi-path optimization with route splitting
    */
   private async findRoutesWithArbitrageEngine(
     orders: ParsedOrder[],
@@ -652,30 +855,68 @@ export class CoWAdapter {
   ): Promise<OrderExecutionPath[]> {
     const settlements: OrderExecutionPath[] = [];
 
+    logger.info('🎯 Routing user orders to maximize surplus (using multi-path optimization)');
+
     try {
-      // Use your existing sophisticated engine!
-      const opportunities = await this.arbitrage!.evaluateMarkets(marketsByToken);
-
-      logger.info(`Advanced engine found ${opportunities.length} opportunities`);
-
-      // Match opportunities to orders
+      // Route each order to maximize user output
       for (const order of orders) {
-        const matchedOpp = opportunities.find(opp =>
-          this.opportunityMatchesOrder(opp, order)
-        );
-
-        if (matchedOpp) {
-          const path = this.convertOpportunityToPath(matchedOpp, order, marketsByToken);
-          if (path) {
-            settlements.push(path);
-          }
+        logger.info(`🔍 Routing order ${order.uid.substring(0, 10)}... (${order.sellToken.substring(0, 10)} → ${order.buyToken.substring(0, 10)})`);
+        
+        // Find all possible routes for this order
+        const alternativePaths = await this.findAllRoutesForOrder(order, marketsByToken);
+        
+        logger.info(`Found ${alternativePaths.length} alternative paths for this order`);
+        
+        if (alternativePaths.length === 0) {
+          logger.warn(`❌ No viable routes for order ${order.uid.substring(0, 10)}... (${order.sellToken.substring(0, 6)}...→${order.buyToken.substring(0, 6)}...)`);
+          continue;
         }
+
+        // If multiple paths exist, use GA for multi-path optimization
+        let finalPath: OrderExecutionPath;
+        if (alternativePaths.length > 1 && this.hybridGAEngine) {
+          logger.info(`🧬 Using Genetic Algorithm to optimize ${alternativePaths.length}-path split`);
+          
+          // Use Hybrid GA Engine for optimal multi-path routing
+          const gaOptimized = await this.optimizeWithGA(order, alternativePaths, marketsByToken);
+          
+          if (gaOptimized && gaOptimized.outputAmount.gt(alternativePaths[0].outputAmount)) {
+            finalPath = gaOptimized;
+            const improvement = gaOptimized.outputAmount.sub(alternativePaths[0].outputAmount);
+            logger.info(`✅ GA improved output by ${ethers.utils.formatUnits(improvement, 18)} tokens (${alternativePaths.length} paths optimized)`);
+          } else {
+            // Single path is best
+            finalPath = alternativePaths[0];
+            logger.info(`📊 Single path optimal (GA didn't improve)`);
+          }
+        } else if (alternativePaths.length > 1) {
+          // Fallback to RouteSplitter if GA not available
+          const optimized = await this.routeSplitter.findOptimalSplit(order, alternativePaths);
+          if (optimized && optimized.totalOutput.gt(alternativePaths[0].outputAmount)) {
+            finalPath = this.convertSplitToPath(order, optimized);
+            logger.info(`✂️  Heuristic split improved output`);
+          } else {
+            finalPath = alternativePaths[0];
+          }
+        } else {
+          // Only one path available
+          finalPath = alternativePaths[0];
+        }
+        
+        settlements.push(finalPath);
+        logger.info(`✅ Routed order ${order.uid.substring(0, 10)}...`, {
+          sellAmount: ethers.utils.formatUnits(order.sellAmount, 18),
+          expectedOutput: ethers.utils.formatUnits(finalPath.outputAmount, 18),
+          surplus: ethers.utils.formatUnits(finalPath.surplus, 18),
+          paths: alternativePaths.length,
+          route: finalPath.route.map(m => m.protocol).join(' → ')
+        });
       }
 
       logger.info(`Advanced routing settled ${settlements.length}/${orders.length} orders`);
 
     } catch (error) {
-      logger.error('Advanced routing failed, falling back to basic', {
+      logger.error('Order routing failed', {
         error: error instanceof Error ? error.message : String(error)
       });
 

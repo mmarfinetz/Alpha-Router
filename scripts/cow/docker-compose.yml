@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Your CoW Solver
+  solver:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.cow
+    ports:
+      - "8000:8000"
+    environment:
+      - ETHEREUM_RPC_URL=${NODE_URL}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - NODE_ENV=production
+    networks:
+      - cow-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # CoW Protocol Driver
+  driver:
+    image: ghcr.io/cowprotocol/services:latest
+    command: >
+      driver
+      --config /app/driver.config.toml
+      --ethrpc ${NODE_URL}
+    ports:
+      - "11088:11088"
+    volumes:
+      - ./driver.config.toml:/app/driver.config.toml:ro
+    networks:
+      - cow-network
+    depends_on:
+      solver:
+        condition: service_healthy
+
+  # CoW Protocol Autopilot
+  autopilot:
+    image: ghcr.io/cowprotocol/services:latest
+    command: >
+      autopilot
+      --native-price-estimators "baseline|http://driver:11088/baseline"
+      --skip-event-sync true
+      --node-url ${NODE_URL}
+      --shadow https://api.cow.fi/mainnet
+      --drivers "ga-solver|http://driver:11088/ga-solver"
+    networks:
+      - cow-network
+    depends_on:
+      - driver
+    environment:
+      - NODE_URL=${NODE_URL}
+
+networks:
+  cow-network:
+    driver: bridge
+
