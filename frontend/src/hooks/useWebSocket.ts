@@ -41,7 +41,10 @@ interface WebSocketData {
   connected: boolean;
 }
 
-const SOCKET_URL = 'http://localhost:3001';
+const SOCKET_URL = process.env.REACT_APP_BACKEND_URL || 
+  (process.env.NODE_ENV === 'production'
+    ? 'https://cow-solver-production.up.railway.app'
+    : 'http://localhost:3001');
 
 export function useWebSocket(): WebSocketData {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);

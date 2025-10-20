@@ -88,7 +88,7 @@ interface SolverMetricsData {
 // WebSocket URL - Use Railway in production, localhost for development
 const SOLVER_WS_URL = process.env.REACT_APP_SOLVER_WS_URL || 
   (process.env.NODE_ENV === 'production' 
-    ? 'https://arbitrage-bot-production.up.railway.app'  // Update with your Railway URL
+    ? 'https://cow-solver-production.up.railway.app'
     : 'http://localhost:8000');
 
 export function useSolverMetrics(): SolverMetricsData {
