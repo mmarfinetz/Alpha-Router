@@ -1,0 +1,266 @@
+{
+  "meta": {
+    "id": "tenderly-19100000-medium-medium",
+    "orderSizeClass": "medium",
+    "fragmentation": "high",
+    "ammDiversity": "mixed_v2_v3_curve",
+    "gasRegime": "medium",
+    "baseToken": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "quoteToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "orderSizeWei": "10000000000000000000",
+    "blockNumber": 19100000,
+    "timestamp": 1706383703
+  },
+  "markets": [
+    {
+      "marketAddress": "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc",
+      "protocol": "UniswapV2",
+      "tokens": [
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "49259477321559",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "21710962685013570505904"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0xA478c2975Ab1Ea89e8196811F51A7B7Ade33eB11",
+      "protocol": "UniswapV2",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F": "6249301627282064070000774",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "2754954124902340151977"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0xAE461cA67B15dc8dc81CE7615e0320dA1A9aB8D5",
+      "protocol": "UniswapV2",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F": "802217277228515035511562",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "801464145363"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852",
+      "protocol": "UniswapV2",
+      "tokens": [
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "34877837071227225891800",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7": "79168546588992"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0xBb2b8038a1640196FbE3e38816F3e67Cba72D940",
+      "protocol": "UniswapV2",
+      "tokens": [
+        "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599": "10623772306",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "1952357624657399229284"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8",
+      "protocol": "UniswapV3",
+      "tokens": [
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 30,
+      "sqrtPriceX96": "1663988924292965032999639222050253",
+      "liquidity": "4843433600111876601",
+      "tick": 199057,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
+      "protocol": "UniswapV3",
+      "tokens": [
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 5,
+      "sqrtPriceX96": "1661898610680612107345835578238756",
+      "liquidity": "10501138413654514644",
+      "tick": 199032,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0xC2e9F25Be6257c210d7Adf0D4Cd6E3E881ba25f8",
+      "protocol": "UniswapV3",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 30,
+      "sqrtPriceX96": "1663996213896414256322272225",
+      "liquidity": "1699993523348412508067827",
+      "tick": -77267,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x60594a405d53811d3BC4766596EFD80fd545A270",
+      "protocol": "UniswapV3",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 5,
+      "sqrtPriceX96": "1661784370127211854268612436",
+      "liquidity": "344267341052288846352927",
+      "tick": -77293,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168",
+      "protocol": "UniswapV3",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      ],
+      "feeBps": 1,
+      "sqrtPriceX96": "79227988201066338987777",
+      "liquidity": "455189214571534644749740",
+      "tick": -276325,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6",
+      "protocol": "UniswapV3",
+      "tokens": [
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+      ],
+      "feeBps": 1,
+      "sqrtPriceX96": "79236886307687306482963001011",
+      "liquidity": "231684672640065654",
+      "tick": 2,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x397FF1542f962076d0BFE58eA045FfA2d347ACa0",
+      "protocol": "Sushiswap",
+      "tokens": [
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "6135805115579",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "2704877698743831402714"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0xC3D03e4F041Fd4cD388c549Ee2A29a9E5075882f",
+      "protocol": "Sushiswap",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F": "4277211514720161834730104",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "1884860671901202838663"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x06da0fd433C1A5d7a4faa01111c044910A184553",
+      "protocol": "Sushiswap",
+      "tokens": [
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+      ],
+      "feeBps": 30,
+      "reserves": {
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "3102923816932616516145",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7": "7043166524994"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7",
+      "protocol": "Curve",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+      ],
+      "feeBps": 4,
+      "reserves": {
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F": "55391046555087861535469458",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "56243731657859",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7": "86140529964207"
+      },
+      "ampA": 2000,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0xDcEF968d416a41Cdac0ED8702fAC8128A64241A2",
+      "protocol": "Curve",
+      "tokens": [
+        "0x853d955aCEf822Db058eb8505911ED77F175b99e",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      ],
+      "feeBps": 4,
+      "reserves": {
+        "0x853d955aCEf822Db058eb8505911ED77F175b99e": "51957755125457166040671942",
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "12462935123506"
+      },
+      "ampA": 1500,
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x0b09deA16768f0799065C475bE02919503cB2a35",
+      "protocol": "BalancerV2",
+      "tokens": [
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 20,
+      "reserves": {
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F": "177041556263911130405710",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "117311052206196003214"
+      },
+      "blockNumber": 19100000
+    },
+    {
+      "marketAddress": "0x96646936b91d6B9D7D0c47C496AfBF3D6ec7B6f8",
+      "protocol": "BalancerV2",
+      "tokens": [
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+      ],
+      "feeBps": 20,
+      "reserves": {
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "145010271822",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "63968577200187743455"
+      },
+      "blockNumber": 19100000
+    }
+  ]
+}

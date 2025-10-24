@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns='http://www.w3.org/2000/svg' width='520' height='360'>
+  <rect x='0' y='0' width='520' height='360' fill='white' />
+  <text x='260' y='18' font-family='sans-serif' font-size='14' text-anchor='middle'>ECDF of Δ net surplus (ETH), fragmentation=high</text>
+  <!-- Axes -->
+  <line x1='60' y1='30' x2='60' y2='320' stroke='#000'/>
+  <line x1='60' y1='320' x2='500' y2='320' stroke='#000'/>
+  <!-- Ticks X -->
+  <line x1='60' y1='320' x2='60' y2='325' stroke='#000'/><line x1='170' y1='320' x2='170' y2='325' stroke='#000'/><line x1='280' y1='320' x2='280' y2='325' stroke='#000'/><line x1='390' y1='320' x2='390' y2='325' stroke='#000'/><line x1='500' y1='320' x2='500' y2='325' stroke='#000'/>
+  <text x='60' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.00</text><text x='170' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>2.71</text><text x='280' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>5.42</text><text x='390' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>8.14</text><text x='500' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>10.85</text>
+  <!-- Ticks Y -->
+  <line x1='55' y1='320' x2='60' y2='320' stroke='#000'/><line x1='55' y1='247.5' x2='60' y2='247.5' stroke='#000'/><line x1='55' y1='175' x2='60' y2='175' stroke='#000'/><line x1='55' y1='102.5' x2='60' y2='102.5' stroke='#000'/><line x1='55' y1='30' x2='60' y2='30' stroke='#000'/>
+  <text x='52' y='323' font-size='10' text-anchor='end' font-family='sans-serif'>0.00</text><text x='52' y='250.5' font-size='10' text-anchor='end' font-family='sans-serif'>0.25</text><text x='52' y='178' font-size='10' text-anchor='end' font-family='sans-serif'>0.50</text><text x='52' y='105.5' font-size='10' text-anchor='end' font-family='sans-serif'>0.75</text><text x='52' y='33' font-size='10' text-anchor='end' font-family='sans-serif'>1.00</text>
+  <!-- Labels -->
+  <text x='280' y='355' font-family='sans-serif' font-size='12' text-anchor='middle'>Δ Net surplus (ETH)</text>
+  <text transform='translate(12,175) rotate(-90)' font-family='sans-serif' font-size='12' text-anchor='middle'>ECDF</text>
+  <!-- Data -->
+  <path d='M99.72,315.17 L99.73,310.33 L99.99,305.50 L100.05,300.67 L100.07,295.83 L100.25,291.00 L100.35,286.17 L100.50,281.33 L100.67,276.50 L100.69,271.67 L100.71,266.83 L100.71,262.00 L100.72,257.17 L100.72,252.33 L100.73,247.50 L100.73,242.67 L100.73,237.83 L101.00,233.00 L101.10,228.17 L101.26,223.33 L101.83,218.50 L101.83,213.67 L102.30,208.83 L102.57,204.00 L103.29,199.17 L103.43,194.33 L103.92,189.50 L104.17,184.67 L104.87,179.83 L105.16,175.00 L437.23,170.17 L439.92,165.33 L440.00,160.50 L440.79,155.67 L443.98,150.83 L446.99,146.00 L450.93,141.17 L453.25,136.33 L454.62,131.50 L456.16,126.67 L456.46,121.83 L457.45,117.00 L458.71,112.17 L459.21,107.33 L459.64,102.50 L460.98,97.67 L461.46,92.83 L462.24,88.00 L463.55,83.17 L463.61,78.33 L465.00,73.50 L465.19,68.67 L465.38,63.83 L466.14,59.00 L466.22,54.17 L466.31,49.33 L466.34,44.50 L467.36,39.67 L475.36,34.83 L479.05,30.00' fill='none' stroke='#9467bd' stroke-width='2'/>
+  
+</svg>

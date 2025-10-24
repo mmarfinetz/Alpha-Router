@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "id": "ex-mixed-sm-low-glow",
+    "orderSizeClass": "small",
+    "fragmentation": "low",
+    "ammDiversity": "mixed_v2_v3_curve",
+    "gasRegime": "low",
+    "baseToken": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "quoteToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "orderSizeWei": "1000000000000000000"
+  },
+  "markets": [
+    { "marketAddress": "0xa1a0", "protocol": "UniswapV2", "tokens": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], "feeBps": 30, "reserves": {"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":"240000000000000000000","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"9000000000000"} },
+    { "marketAddress": "0xa1a1", "protocol": "UniswapV2", "tokens": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","0x6B175474E89094C44Da98b954EedeAC495271d0F"], "feeBps": 30, "reserves": {"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":"170000000000000000000","0x6B175474E89094C44Da98b954EedeAC495271d0F":"320000000000000000000000"} },
+    { "marketAddress": "0xa1a2", "protocol": "Curve", "tokens": ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","0x6B175474E89094C44Da98b954EedeAC495271d0F"], "feeBps": 5, "ampA": 200, "reserves": {"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"9800000000000","0x6B175474E89094C44Da98b954EedeAC495271d0F":"330000000000000000000000"} },
+    { "marketAddress": "0xa1v3", "protocol": "UniswapV3", "tokens": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], "feeBps": 30, "sqrtPriceX96": "79228162514264337593543950336", "liquidity": "1000000" },
+    { "marketAddress": "0xa1v4", "protocol": "UniswapV3", "tokens": ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","0x6B175474E89094C44Da98b954EedeAC495271d0F"], "feeBps": 5, "sqrtPriceX96": "79228162514264337593543950336", "liquidity": "1000000" }
+  ]
+}

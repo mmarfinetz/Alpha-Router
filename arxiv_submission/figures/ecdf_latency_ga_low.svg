@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns='http://www.w3.org/2000/svg' width='520' height='360'>
+  <rect x='0' y='0' width='520' height='360' fill='white' />
+  <text x='260' y='18' font-family='sans-serif' font-size='14' text-anchor='middle'>ECDF of GA latency (low gas; cap = 1 s)</text>
+  <!-- Axes -->
+  <line x1='60' y1='30' x2='60' y2='320' stroke='#000'/>
+  <line x1='60' y1='320' x2='500' y2='320' stroke='#000'/>
+  <!-- Ticks X -->
+  <line x1='60' y1='320' x2='60' y2='325' stroke='#000'/><line x1='170' y1='320' x2='170' y2='325' stroke='#000'/><line x1='280' y1='320' x2='280' y2='325' stroke='#000'/><line x1='390' y1='320' x2='390' y2='325' stroke='#000'/><line x1='500' y1='320' x2='500' y2='325' stroke='#000'/>
+  <text x='60' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.00</text><text x='170' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.30</text><text x='280' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.60</text><text x='390' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.90</text><text x='500' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>1.20</text>
+  <!-- Ticks Y -->
+  <line x1='55' y1='320' x2='60' y2='320' stroke='#000'/><line x1='55' y1='247.5' x2='60' y2='247.5' stroke='#000'/><line x1='55' y1='175' x2='60' y2='175' stroke='#000'/><line x1='55' y1='102.5' x2='60' y2='102.5' stroke='#000'/><line x1='55' y1='30' x2='60' y2='30' stroke='#000'/>
+  <text x='52' y='323' font-size='10' text-anchor='end' font-family='sans-serif'>0.00</text><text x='52' y='250.5' font-size='10' text-anchor='end' font-family='sans-serif'>0.25</text><text x='52' y='178' font-size='10' text-anchor='end' font-family='sans-serif'>0.50</text><text x='52' y='105.5' font-size='10' text-anchor='end' font-family='sans-serif'>0.75</text><text x='52' y='33' font-size='10' text-anchor='end' font-family='sans-serif'>1.00</text>
+  <!-- Labels -->
+  <text x='280' y='355' font-family='sans-serif' font-size='12' text-anchor='middle'>Latency (s)</text>
+  <text transform='translate(12,175) rotate(-90)' font-family='sans-serif' font-size='12' text-anchor='middle'>ECDF</text>
+  <!-- Data -->
+  <path d='M426.67,317.58 L426.67,315.17 L427.03,312.75 L427.03,310.33 L427.40,307.92 L427.77,305.50 L427.77,303.08 L427.77,300.67 L427.77,298.25 L427.77,295.83 L428.13,293.42 L428.13,291.00 L428.50,288.58 L428.87,286.17 L428.87,283.75 L428.87,281.33 L429.23,278.92 L429.23,276.50 L429.60,274.08 L429.97,271.67 L430.33,269.25 L430.33,266.83 L430.33,264.42 L430.70,262.00 L430.70,259.58 L430.70,257.17 L431.07,254.75 L431.07,252.33 L431.07,249.92 L431.43,247.50 L432.17,245.08 L432.17,242.67 L432.53,240.25 L432.53,237.83 L432.53,235.42 L432.90,233.00 L433.27,230.58 L433.63,228.17 L434.00,225.75 L434.00,223.33 L434.00,220.92 L435.10,218.50 L436.93,216.08 L437.67,213.67 L438.40,211.25 L438.40,208.83 L439.50,206.42 L439.87,204.00 L439.87,201.58 L440.23,199.17 L441.70,196.75 L442.07,194.33 L442.07,191.92 L442.43,189.50 L443.17,187.08 L443.17,184.67 L443.17,182.25 L443.17,179.83 L443.53,177.42 L443.53,175.00 L443.90,172.58 L444.27,170.17 L445.37,167.75 L446.47,165.33 L446.83,162.92 L447.20,160.50 L447.20,158.08 L447.57,155.67 L449.03,153.25 L449.03,150.83 L449.40,148.42 L450.50,146.00 L451.23,143.58 L451.23,141.17 L451.60,138.75 L451.60,136.33 L451.60,133.92 L451.60,131.50 L453.07,129.08 L453.80,126.67 L454.17,124.25 L454.90,121.83 L455.27,119.42 L455.63,117.00 L456.37,114.58 L456.37,112.17 L457.47,109.75 L459.30,107.33 L459.30,104.92 L459.30,102.50 L459.67,100.08 L461.13,97.67 L462.23,95.25 L462.97,92.83 L463.33,90.42 L463.33,88.00 L464.07,85.58 L464.07,83.17 L464.07,80.75 L465.17,78.33 L466.27,75.92 L466.63,73.50 L467.00,71.08 L467.73,68.67 L468.47,66.25 L468.47,63.83 L469.93,61.42 L469.93,59.00 L471.40,56.58 L473.60,54.17 L473.60,51.75 L473.97,49.33 L475.43,46.92 L478.00,44.50 L478.00,42.08 L479.83,39.67 L480.93,37.25 L482.03,34.83 L483.13,32.42 L486.07,30.00' fill='none' stroke='#ff7f0e' stroke-width='2'/>
+  
+</svg>

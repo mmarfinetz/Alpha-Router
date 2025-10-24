@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns='http://www.w3.org/2000/svg' width='520' height='360'>
+  <rect x='0' y='0' width='520' height='360' fill='white' />
+  <text x='260' y='18' font-family='sans-serif' font-size='14' text-anchor='middle'>ECDF of GA latency (high gas; cap = 1 s)</text>
+  <!-- Axes -->
+  <line x1='60' y1='30' x2='60' y2='320' stroke='#000'/>
+  <line x1='60' y1='320' x2='500' y2='320' stroke='#000'/>
+  <!-- Ticks X -->
+  <line x1='60' y1='320' x2='60' y2='325' stroke='#000'/><line x1='170' y1='320' x2='170' y2='325' stroke='#000'/><line x1='280' y1='320' x2='280' y2='325' stroke='#000'/><line x1='390' y1='320' x2='390' y2='325' stroke='#000'/><line x1='500' y1='320' x2='500' y2='325' stroke='#000'/>
+  <text x='60' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.00</text><text x='170' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.30</text><text x='280' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.60</text><text x='390' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>0.90</text><text x='500' y='338' font-size='10' text-anchor='middle' font-family='sans-serif'>1.20</text>
+  <!-- Ticks Y -->
+  <line x1='55' y1='320' x2='60' y2='320' stroke='#000'/><line x1='55' y1='247.5' x2='60' y2='247.5' stroke='#000'/><line x1='55' y1='175' x2='60' y2='175' stroke='#000'/><line x1='55' y1='102.5' x2='60' y2='102.5' stroke='#000'/><line x1='55' y1='30' x2='60' y2='30' stroke='#000'/>
+  <text x='52' y='323' font-size='10' text-anchor='end' font-family='sans-serif'>0.00</text><text x='52' y='250.5' font-size='10' text-anchor='end' font-family='sans-serif'>0.25</text><text x='52' y='178' font-size='10' text-anchor='end' font-family='sans-serif'>0.50</text><text x='52' y='105.5' font-size='10' text-anchor='end' font-family='sans-serif'>0.75</text><text x='52' y='33' font-size='10' text-anchor='end' font-family='sans-serif'>1.00</text>
+  <!-- Labels -->
+  <text x='280' y='355' font-family='sans-serif' font-size='12' text-anchor='middle'>Latency (s)</text>
+  <text transform='translate(12,175) rotate(-90)' font-family='sans-serif' font-size='12' text-anchor='middle'>ECDF</text>
+  <!-- Data -->
+  <path d='M426.67,316.78 L426.67,313.56 L426.67,310.33 L426.67,307.11 L426.67,303.89 L426.67,300.67 L427.03,297.44 L427.03,294.22 L427.03,291.00 L427.03,287.78 L427.03,284.56 L427.03,281.33 L427.03,278.11 L427.03,274.89 L427.40,271.67 L427.40,268.44 L427.40,265.22 L427.40,262.00 L427.77,258.78 L427.77,255.56 L427.77,252.33 L427.77,249.11 L427.77,245.89 L427.77,242.67 L428.13,239.44 L428.13,236.22 L428.13,233.00 L428.50,229.78 L428.50,226.56 L428.50,223.33 L428.87,220.11 L428.87,216.89 L428.87,213.67 L428.87,210.44 L429.23,207.22 L429.23,204.00 L429.23,200.78 L429.23,197.56 L429.23,194.33 L429.23,191.11 L429.97,187.89 L429.97,184.67 L429.97,181.44 L429.97,178.22 L430.33,175.00 L430.33,171.78 L430.33,168.56 L430.70,165.33 L430.70,162.11 L431.07,158.89 L431.07,155.67 L431.43,152.44 L431.80,149.22 L432.17,146.00 L432.17,142.78 L432.17,139.56 L433.27,136.33 L433.27,133.11 L433.27,129.89 L433.63,126.67 L433.63,123.44 L433.63,120.22 L434.00,117.00 L435.47,113.78 L435.47,110.56 L437.30,107.33 L438.77,104.11 L439.50,100.89 L439.50,97.67 L442.80,94.44 L442.80,91.22 L445.73,88.00 L447.20,84.78 L447.57,81.56 L447.93,78.33 L449.40,75.11 L449.77,71.89 L450.50,68.67 L451.97,65.44 L453.80,62.22 L454.90,59.00 L455.63,55.78 L456.00,52.56 L457.47,49.33 L460.03,46.11 L461.13,42.89 L467.00,39.67 L468.10,36.44 L483.50,33.22 L486.07,30.00' fill='none' stroke='#ff7f0e' stroke-width='2'/>
+  
+</svg>

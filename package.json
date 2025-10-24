@@ -1,0 +1,17 @@
+{
+  "name": "alpha-router",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "figures": "bash scripts/make-figures-lite.sh",
+    "aggregate": "npx ts-node scripts/bench/aggregate_results.ts benchmarks/results/results.json benchmarks/results/aggregate.json",
+    "plot": "npx ts-node scripts/bench/plot_figures.ts benchmarks/results/results.json arxiv_submission/figures",
+    "bench:sync": "npx ts-node scripts/bench/sync_benchmarks.ts",
+    "bench:verify": "npx ts-node scripts/bench/verify_benchmarks.ts"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": ">=4.5.0"
+  }
+}

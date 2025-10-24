@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "id": "ex-mixed-lg-med-gmed",
+    "orderSizeClass": "large",
+    "fragmentation": "medium",
+    "ammDiversity": "mixed_v2_v3_curve",
+    "gasRegime": "medium",
+    "baseToken": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "quoteToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "orderSizeWei": "200000000000000000000"
+  },
+  "markets": [
+    { "marketAddress": "0xa150", "protocol": "UniswapV2", "tokens": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], "feeBps": 30, "reserves": {"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":"450000000000000000000","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"18000000000000"} },
+    { "marketAddress": "0xa151", "protocol": "UniswapV2", "tokens": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","0x6B175474E89094C44Da98b954EedeAC495271d0F"], "feeBps": 30, "reserves": {"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":"400000000000000000000","0x6B175474E89094C44Da98b954EedeAC495271d0F":"760000000000000000000000"} },
+    { "marketAddress": "0xa152", "protocol": "Curve", "tokens": ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","0x6B175474E89094C44Da98b954EedeAC495271d0F"], "feeBps": 5, "ampA": 200, "reserves": {"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"14000000000000","0x6B175474E89094C44Da98b954EedeAC495271d0F":"900000000000000000000000"} },
+    { "marketAddress": "0xa153", "protocol": "BalancerV2", "tokens": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], "feeBps": 20, "reserves": {"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2":"160000000000000000000","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48":"7000000000000"} },
+    { "marketAddress": "0xa1v3", "protocol": "UniswapV3", "tokens": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"], "feeBps": 30, "sqrtPriceX96": "5005784370019714635522333", "liquidity": "4957236120361918707" },
+    { "marketAddress": "0xa1v4", "protocol": "UniswapV3", "tokens": ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","0x6B175474E89094C44Da98b954EedeAC495271d0F"], "feeBps": 1, "sqrtPriceX96": "79230658212562654859188", "liquidity": "10293858876752444393419" }
+  ]
+}
