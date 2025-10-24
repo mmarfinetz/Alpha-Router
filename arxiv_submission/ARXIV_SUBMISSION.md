@@ -3,7 +3,7 @@ ArXiv submission checklist and metadata
 - Primary category: `cs.NE` (Neural and Evolutionary Computation)
 - Secondary categories: `cs.CR`, `cs.DS`, `q-fin.TR` (optional)
 - Comments (paste into arXiv form):
-  Preprint, 20 pages, 8 figures, 9 tables; artifact pinned at commit a4ce66c3 (instructions inside).
+  Preprint, 20 pages, 8 figures, 9 tables; artifact pinned at commit 5fd9f78 (instructions inside).
 
 Packaging (pdfLaTeX):
 - Upload: `hybrid_ga_mev_arxiv.tex` and all PNGs under `arxiv_submission/figures/`.
