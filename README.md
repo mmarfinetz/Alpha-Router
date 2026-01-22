@@ -1,4 +1,4 @@
-# Hybrid Genetic Algorithm for Optimal User Order Routing (Publication Package)
+# Hybrid Genetic Algorithm for Optimal User Order Routing 
 
 This repo contains the paper source/PDF, benchmark instances, result JSONs, and scripts to (re)generate figures from provided results. Solver implementation is intentionally excluded.
 
